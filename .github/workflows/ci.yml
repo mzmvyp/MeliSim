@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------- Python services: lint + tests + coverage ----------
   python-services:
     name: python — ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -26,11 +27,25 @@ jobs:
           cache-dependency-path: ${{ matrix.service }}/requirements.txt
       - name: install
         working-directory: ${{ matrix.service }}
-        run: pip install --upgrade pip && pip install -r requirements.txt
-      - name: test
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pytest-cov
+      - name: lint (ruff)
         working-directory: ${{ matrix.service }}
-        run: pytest -q
+        run: ruff check . || true   # lint is advisory on first iteration
+      - name: test + coverage
+        working-directory: ${{ matrix.service }}
+        run: pytest -q --cov=. --cov-report=xml --cov-report=term
+      - name: upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.service }}
+          path: ${{ matrix.service }}/coverage.xml
+          if-no-files-found: ignore
 
+  # ---------- Java: users-service ----------
   users-service:
     name: java — users-service
     runs-on: ubuntu-latest
@@ -45,6 +60,7 @@ jobs:
         working-directory: users-service
         run: mvn -B -q test
 
+  # ---------- Kotlin: orders-service ----------
   orders-service:
     name: kotlin — orders-service
     runs-on: ubuntu-latest
@@ -59,6 +75,7 @@ jobs:
         working-directory: orders-service
         run: chmod +x ./gradlew && ./gradlew test --no-daemon
 
+  # ---------- Go: products-service + stock-monitor ----------
   go-services:
     name: go — ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -75,13 +92,28 @@ jobs:
       - name: tidy
         working-directory: ${{ matrix.service }}
         run: go mod tidy
+      - name: lint (golangci-lint)
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.56
+          working-directory: ${{ matrix.service }}
+          args: --timeout=5m
+        continue-on-error: true
       - name: build
         working-directory: ${{ matrix.service }}
         run: go build ./...
       - name: test
         working-directory: ${{ matrix.service }}
-        run: go test ./...
+        run: go test -v -race -coverprofile=coverage.out ./...
+      - name: upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.service }}
+          path: ${{ matrix.service }}/coverage.out
+          if-no-files-found: ignore
 
+  # ---------- Compose sanity ----------
   compose-sanity:
     name: docker-compose config
     runs-on: ubuntu-latest
@@ -89,3 +121,32 @@ jobs:
       - uses: actions/checkout@v4
       - name: validate compose
         run: docker compose config -q
+
+  # ---------- Security: Trivy filesystem scan ----------
+  security-scan:
+    name: trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.19.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          format: table
+          exit-code: "0"  # advisory; flip to "1" when the baseline is clean
+
+  # ---------- Security: Trivy config scan (Dockerfiles, compose, k8s) ----------
+  security-config:
+    name: trivy config scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.19.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          exit-code: "0"

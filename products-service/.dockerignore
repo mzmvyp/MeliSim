@@ -1,0 +1,6 @@
+tests/
+*_test.go
+*.md
+.git/
+bin/
+*.exe

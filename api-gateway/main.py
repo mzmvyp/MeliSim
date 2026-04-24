@@ -7,14 +7,18 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from middleware.auth import AuthMiddleware
+from middleware.correlation import CorrelationIdMiddleware, RequestIdLogFilter
 from middleware.cors import setup_cors
+from middleware.metrics import PrometheusMiddleware, metrics_endpoint
 from middleware.rate_limiter import RateLimiterMiddleware
+from observability import setup_tracing
 from routes.router import router as gateway_router
 
 logging.basicConfig(
     level=logging.INFO,
-    format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}',
+    format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","request_id":"%(request_id)s","msg":"%(message)s"}',
 )
+logging.getLogger().addFilter(RequestIdLogFilter())
 logger = logging.getLogger("api-gateway")
 
 
@@ -30,12 +34,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="MeliSim API Gateway", version="1.0.0", lifespan=lifespan)
 
 setup_cors(app)
+setup_tracing(app)
+app.add_middleware(PrometheusMiddleware)
 app.add_middleware(
     RateLimiterMiddleware,
     max_requests=int(os.getenv("RATE_LIMIT_PER_MINUTE", "100")),
     window_seconds=60,
 )
 app.add_middleware(AuthMiddleware)
+app.add_middleware(CorrelationIdMiddleware)
 
 app.include_router(gateway_router, prefix="/api/v1")
 
@@ -43,6 +50,29 @@ app.include_router(gateway_router, prefix="/api/v1")
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "api-gateway"}
+
+
+@app.get("/health/live")
+async def health_live():
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def health_ready():
+    try:
+        r = await app.state.http_client.get(
+            f"{os.getenv('USERS_SERVICE_URL', 'http://users-service:8001')}/users/health",
+            timeout=2,
+        )
+        r.raise_for_status()
+        return {"status": "ready"}
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"status": "not-ready", "detail": str(e)})
+
+
+@app.get("/metrics")
+async def metrics():
+    return metrics_endpoint()
 
 
 @app.exception_handler(httpx.HTTPError)

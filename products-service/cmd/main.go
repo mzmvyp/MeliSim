@@ -16,6 +16,7 @@ import (
 	"github.com/melisim/products-service/internal/events"
 	"github.com/melisim/products-service/internal/handler"
 	mw "github.com/melisim/products-service/internal/middleware"
+	"github.com/melisim/products-service/internal/observability"
 	"github.com/melisim/products-service/internal/repository"
 	"github.com/melisim/products-service/internal/service"
 )
@@ -54,9 +55,20 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
+	r.Use(observability.CorrelationID)
+	r.Use(observability.Metrics(func(req *http.Request) string {
+		// Use the chi route pattern so /products/42 doesn't blow up cardinality.
+		if ctx := chi.RouteContext(req.Context()); ctx != nil && ctx.RoutePattern() != "" {
+			return ctx.RoutePattern()
+		}
+		return req.URL.Path
+	}))
 	r.Use(mw.StructuredLogger)
 
+	r.Handle("/metrics", observability.MetricsHandler())
 	r.Get("/health", h.Health)
+	r.Get("/health/live", h.Health)
+	r.Get("/health/ready", h.Ready)
 	r.Route("/products", func(r chi.Router) {
 		r.Get("/", h.List)
 		r.Post("/", h.Create)

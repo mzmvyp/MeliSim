@@ -128,6 +128,8 @@ services:
       SEARCH_SERVICE_URL: http://search-service:8006
       JWT_SECRET: melisim-super-secret-key-change-in-prod
       RATE_LIMIT_PER_MINUTE: "100"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: api-gateway
     depends_on:
       - users-service
       - products-service
@@ -147,6 +149,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: melisim123
       JWT_SECRET: melisim-super-secret-key-change-in-prod
       SERVER_PORT: "8001"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      OTEL_SERVICE_NAME: users-service
     depends_on:
       mysql:
         condition: service_healthy
@@ -162,6 +166,8 @@ services:
       REDIS_URL: redis:6379
       KAFKA_BROKERS: kafka:9092
       PORT: "8002"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: products-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -183,6 +189,8 @@ services:
       KAFKA_BROKERS: kafka:9092
       PRODUCTS_SERVICE_URL: http://products-service:8002
       SERVER_PORT: "8003"
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
+      OTEL_SERVICE_NAME: orders-service
     depends_on:
       mysql:
         condition: service_healthy
@@ -199,6 +207,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://melisim:melisim123@postgres:5432/melisim
       KAFKA_BROKERS: kafka:9092
       PORT: "8004"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: payments-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -215,6 +225,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://melisim:melisim123@postgres:5432/melisim
       KAFKA_BROKERS: kafka:9092
       PORT: "8005"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: notifications-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -231,6 +243,8 @@ services:
       ELASTICSEARCH_URL: http://elasticsearch:9200
       KAFKA_BROKERS: kafka:9092
       PORT: "8006"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_SERVICE_NAME: search-service
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -242,17 +256,65 @@ services:
     build: ./stock-monitor
     container_name: melisim-stock-monitor
     restart: unless-stopped
+    ports: ["8099:8099"]
     environment:
       PRODUCTS_SERVICE_URL: http://products-service:8002
       KAFKA_BROKERS: kafka:9092
       CHECK_INTERVAL_SECONDS: "60"
       STOCK_THRESHOLD: "10"
+      METRICS_PORT: "8099"
     depends_on:
       - products-service
       - kafka
+    networks: [melisim]
+
+  # --------- Observability stack ---------
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    container_name: melisim-prometheus
+    restart: unless-stopped
+    ports: ["9090:9090"]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=2d'
+      - '--storage.tsdb.path=/prometheus'
+    networks: [melisim]
+
+  grafana:
+    image: grafana/grafana:10.3.1
+    container_name: melisim-grafana
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on: [prometheus]
+    networks: [melisim]
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    container_name: melisim-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"   # UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
     networks: [melisim]
 
 volumes:
   mysql_data:
   postgres_data:
   es_data:
+  prometheus_data:
+  grafana_data:

@@ -27,6 +27,19 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
 
+-- Idempotency-Key storage for POST /payments. Same key + same body → replay the
+-- original response. Same key + different body → 422. Prevents double-charges
+-- when clients retry a timed-out POST.
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    id BIGSERIAL PRIMARY KEY,
+    idempotency_key      VARCHAR(120) NOT NULL UNIQUE,
+    endpoint             VARCHAR(120) NOT NULL,
+    request_fingerprint  VARCHAR(64)  NOT NULL,
+    response_status      INT          NOT NULL,
+    response_body        TEXT         NOT NULL,
+    created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS notifications (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,

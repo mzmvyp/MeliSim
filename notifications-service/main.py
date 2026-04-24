@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from consumers.notification_consumer import run_consumer
 from models.notification import Base, NotificationResponse
+from observability import install as install_observability
 from services.notification_service import history
 
 logging.basicConfig(
@@ -52,11 +53,29 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MeliSim Notifications Service", version="1.0.0", lifespan=lifespan)
+install_observability(app)
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "notifications-service"}
+
+
+@app.get("/health/live")
+async def health_live():
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def health_ready():
+    from sqlalchemy import text
+    from fastapi.responses import JSONResponse
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        return {"status": "ready"}
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"status": "not-ready", "detail": str(e)})
 
 
 @app.get("/notifications/user/{user_id}", response_model=list[NotificationResponse])

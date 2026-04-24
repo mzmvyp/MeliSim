@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from consumers.product_consumer import run_consumer
+from observability import install as install_observability
 from routes.search_routes import router as search_router
 from services.search_service import service
 
@@ -34,9 +35,25 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MeliSim Search Service", version="1.0.0", lifespan=lifespan)
+install_observability(app)
 app.include_router(search_router)
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "search-service"}
+
+
+@app.get("/health/live")
+async def health_live():
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def health_ready():
+    from fastapi.responses import JSONResponse
+    try:
+        ok = await service.client.ping()
+        return {"status": "ready" if ok else "not-ready", "elasticsearch": ok}
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"status": "not-ready", "detail": str(e)})

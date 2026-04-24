@@ -1,0 +1,7 @@
+target/
+*.class
+.idea/
+*.iml
+*.md
+.git/
+src/test/

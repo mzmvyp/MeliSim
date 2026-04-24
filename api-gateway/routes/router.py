@@ -26,6 +26,9 @@ async def _proxy(request: Request, upstream: str, upstream_path: str) -> Respons
     url = f"{upstream.rstrip('/')}/{upstream_path.lstrip('/')}"
     body = await request.body()
     headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP_BY_HOP}
+    rid = getattr(request.state, "request_id", None)
+    if rid:
+        headers["x-request-id"] = rid
 
     upstream_resp = await client.request(
         method=request.method,

@@ -32,6 +32,17 @@ func (h *Handler) Health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "products-service"})
 }
 
+// Ready calls List(page=1,size=1) to prove the DB is reachable.
+func (h *Handler) Ready(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*1_000_000_000)
+	defer cancel()
+	if _, err := h.svc.List(ctx, 1, 1); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not-ready", "detail": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+}
+
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
