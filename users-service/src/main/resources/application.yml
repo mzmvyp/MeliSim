@@ -1,0 +1,33 @@
+server:
+  port: ${SERVER_PORT:8001}
+
+spring:
+  application:
+    name: users-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/melisim?useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:melisim123}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+    show-sql: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+melisim:
+  jwt:
+    secret: ${JWT_SECRET:melisim-dev-secret-must-be-at-least-32-chars-long}
+    expiration-minutes: 60

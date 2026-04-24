@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif;">
+    <h2>Your MeliSim order was received</h2>
+    <p>Hi,</p>
+    <p>We received your order <strong>#{{ order_id }}</strong>.</p>
+    <ul>
+      <li>Product: {{ product_id }}</li>
+      <li>Quantity: {{ quantity }}</li>
+      <li>Total: R$ {{ total_amount }}</li>
+      <li>Status: {{ status }}</li>
+    </ul>
+    <p>We'll notify you once payment is confirmed.</p>
+  </body>
+</html>

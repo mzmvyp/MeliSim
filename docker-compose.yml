@@ -1,0 +1,258 @@
+version: '3.8'
+
+networks:
+  melisim:
+    driver: bridge
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: melisim-mysql
+    restart: unless-stopped
+    ports: ["3306:3306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: melisim123
+      MYSQL_DATABASE: melisim
+    volumes:
+      - ./infra/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pmelisim123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [melisim]
+
+  postgres:
+    image: postgres:15
+    container_name: melisim-postgres
+    restart: unless-stopped
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_USER: melisim
+      POSTGRES_PASSWORD: melisim123
+      POSTGRES_DB: melisim
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U melisim -d melisim"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [melisim]
+
+  redis:
+    image: redis:7-alpine
+    container_name: melisim-redis
+    restart: unless-stopped
+    ports: ["6379:6379"]
+    volumes:
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [melisim]
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: melisim-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks: [melisim]
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: melisim-kafka
+    restart: unless-stopped
+    depends_on: [zookeeper]
+    ports: ["9092:9092", "29092:29092"]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks: [melisim]
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./infra/kafka/topics.sh:/topics.sh:ro
+    entrypoint: ["/bin/bash", "/topics.sh"]
+    networks: [melisim]
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: melisim-elasticsearch
+    restart: unless-stopped
+    ports: ["9200:9200"]
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'yellow\\|green'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks: [melisim]
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: melisim-api-gateway
+    restart: unless-stopped
+    ports: ["8000:8000"]
+    environment:
+      USERS_SERVICE_URL: http://users-service:8001
+      PRODUCTS_SERVICE_URL: http://products-service:8002
+      ORDERS_SERVICE_URL: http://orders-service:8003
+      PAYMENTS_SERVICE_URL: http://payments-service:8004
+      NOTIFICATIONS_SERVICE_URL: http://notifications-service:8005
+      SEARCH_SERVICE_URL: http://search-service:8006
+      JWT_SECRET: melisim-super-secret-key-change-in-prod
+      RATE_LIMIT_PER_MINUTE: "100"
+    depends_on:
+      - users-service
+      - products-service
+      - orders-service
+      - payments-service
+      - search-service
+    networks: [melisim]
+
+  users-service:
+    build: ./users-service
+    container_name: melisim-users-service
+    restart: unless-stopped
+    ports: ["8001:8001"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/melisim?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: melisim123
+      JWT_SECRET: melisim-super-secret-key-change-in-prod
+      SERVER_PORT: "8001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [melisim]
+
+  products-service:
+    build: ./products-service
+    container_name: melisim-products-service
+    restart: unless-stopped
+    ports: ["8002:8002"]
+    environment:
+      DATABASE_URL: postgres://melisim:melisim123@postgres:5432/melisim?sslmode=disable
+      REDIS_URL: redis:6379
+      KAFKA_BROKERS: kafka:9092
+      PORT: "8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks: [melisim]
+
+  orders-service:
+    build: ./orders-service
+    container_name: melisim-orders-service
+    restart: unless-stopped
+    ports: ["8003:8003"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/melisim?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: melisim123
+      KAFKA_BROKERS: kafka:9092
+      PRODUCTS_SERVICE_URL: http://products-service:8002
+      SERVER_PORT: "8003"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks: [melisim]
+
+  payments-service:
+    build: ./payments-service
+    container_name: melisim-payments-service
+    restart: unless-stopped
+    ports: ["8004:8004"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://melisim:melisim123@postgres:5432/melisim
+      KAFKA_BROKERS: kafka:9092
+      PORT: "8004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks: [melisim]
+
+  notifications-service:
+    build: ./notifications-service
+    container_name: melisim-notifications-service
+    restart: unless-stopped
+    ports: ["8005:8005"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://melisim:melisim123@postgres:5432/melisim
+      KAFKA_BROKERS: kafka:9092
+      PORT: "8005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks: [melisim]
+
+  search-service:
+    build: ./search-service
+    container_name: melisim-search-service
+    restart: unless-stopped
+    ports: ["8006:8006"]
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      KAFKA_BROKERS: kafka:9092
+      PORT: "8006"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks: [melisim]
+
+  stock-monitor:
+    build: ./stock-monitor
+    container_name: melisim-stock-monitor
+    restart: unless-stopped
+    environment:
+      PRODUCTS_SERVICE_URL: http://products-service:8002
+      KAFKA_BROKERS: kafka:9092
+      CHECK_INTERVAL_SECONDS: "60"
+      STOCK_THRESHOLD: "10"
+    depends_on:
+      - products-service
+      - kafka
+    networks: [melisim]
+
+volumes:
+  mysql_data:
+  postgres_data:
+  es_data:
