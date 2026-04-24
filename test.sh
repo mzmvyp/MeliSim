@@ -5,10 +5,16 @@
 # search → create order → pay → verify PAID → show notification history.
 #
 # Assumes: `docker compose up -d --build` has been executed and services are booting.
+#
+# From inside Docker (e.g. on Windows), services listen on the host — use:
+#   docker run --rm -it -v "$PWD:/workspace" -w /workspace -e HOST=host.docker.internal alpine:3.19 \
+#     sh -c "apk add --no-cache bash curl jq >/dev/null && bash ./test.sh"
 
 set -euo pipefail
 
-GATEWAY="${GATEWAY:-http://localhost:8000}"
+# Hostname for published ports (host.docker.internal from a container → host machine on Docker Desktop).
+HOST="${HOST:-localhost}"
+GATEWAY="${GATEWAY:-http://${HOST}:8000}"
 MAX_WAIT="${MAX_WAIT:-180}"
 
 say()   { printf "\n\033[1;36m>>> %s\033[0m\n" "$*"; }
@@ -39,13 +45,13 @@ wait_health() {
 }
 
 say "waiting for services to come up"
-wait_health "$GATEWAY/health"                       "api-gateway"
-wait_health "http://localhost:8001/actuator/health" "users-service"
-wait_health "http://localhost:8002/health"          "products-service"
-wait_health "http://localhost:8003/actuator/health" "orders-service"
-wait_health "http://localhost:8004/health"          "payments-service"
-wait_health "http://localhost:8005/health"          "notifications-service"
-wait_health "http://localhost:8006/health"          "search-service"
+wait_health "$GATEWAY/health"                              "api-gateway"
+wait_health "http://${HOST}:8001/actuator/health"           "users-service"
+wait_health "http://${HOST}:8002/health"                    "products-service"
+wait_health "http://${HOST}:8003/actuator/health"           "orders-service"
+wait_health "http://${HOST}:8004/health"                    "payments-service"
+wait_health "http://${HOST}:8005/health"                    "notifications-service"
+wait_health "http://${HOST}:8006/health"                    "search-service"
 
 # ---------------------------------------------------------------------------
 # 2. Register a seller + a buyer.
