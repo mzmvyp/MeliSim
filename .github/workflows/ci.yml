@@ -57,7 +57,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
       - name: test
         working-directory: orders-service
-        run: gradle --no-daemon test
+        run: chmod +x ./gradlew && ./gradlew test --no-daemon
 
   go-services:
     name: go — ${{ matrix.service }}

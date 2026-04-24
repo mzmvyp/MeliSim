@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/melisim/products-service/internal/cache"
 	"github.com/melisim/products-service/internal/events"
 	"github.com/melisim/products-service/internal/model"
 	"github.com/melisim/products-service/internal/repository"
