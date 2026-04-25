@@ -1,4 +1,5 @@
-version: '3.8'
+# Compose v2: the top-level `version` is obsolete (Spec rev 2+) and triggers
+# a warning when set. The schema is inferred from the file content.
 
 networks:
   melisim:
@@ -128,14 +129,22 @@ services:
       SEARCH_SERVICE_URL: http://search-service:8006
       JWT_SECRET: melisim-super-secret-key-change-in-prod
       RATE_LIMIT_PER_MINUTE: "100"
+      REDIS_URL: redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: api-gateway
     depends_on:
-      - users-service
-      - products-service
-      - orders-service
-      - payments-service
-      - search-service
+      redis:
+        condition: service_healthy
+      users-service:
+        condition: service_started
+      products-service:
+        condition: service_started
+      orders-service:
+        condition: service_started
+      payments-service:
+        condition: service_started
+      search-service:
+        condition: service_started
     networks: [melisim]
 
   users-service:

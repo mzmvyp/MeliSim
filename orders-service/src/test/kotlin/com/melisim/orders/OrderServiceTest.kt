@@ -4,6 +4,7 @@ import com.melisim.orders.client.InsufficientStockException
 import com.melisim.orders.client.ProductSnapshot
 import com.melisim.orders.client.ProductsClient
 import com.melisim.orders.dto.CreateOrderRequest
+import com.melisim.orders.event.OrderCreatedInternalEvent
 import com.melisim.orders.model.Order
 import com.melisim.orders.model.OrderStatus
 import com.melisim.orders.outbox.OutboxPublisher
@@ -11,14 +12,13 @@ import com.melisim.orders.repository.OrderRepository
 import com.melisim.orders.service.IllegalStatusTransitionException
 import com.melisim.orders.service.OrderNotFoundException
 import com.melisim.orders.service.OrderService
-import io.mockk.Runs
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
+import org.springframework.context.ApplicationEventPublisher
 import java.math.BigDecimal
 import java.util.Optional
 
@@ -27,12 +27,12 @@ class OrderServiceTest {
     private val repo = mockk<OrderRepository>()
     private val products = mockk<ProductsClient>()
     private val outbox = mockk<OutboxPublisher>(relaxed = true)
-    private val service = OrderService(repo, products, outbox)
+    private val events = mockk<ApplicationEventPublisher>(relaxed = true)
+    private val service = OrderService(repo, products, outbox, events)
 
     @Test
-    fun `create success calculates total and stages outbox event`() {
+    fun `create stages outbox event and publishes after-commit internal event`() {
         every { products.getProduct(7L) } returns ProductSnapshot(7L, "Book", BigDecimal("50.00"), 10)
-        every { products.decrementStock(7L, 2) } just Runs
         every { repo.save(any<Order>()) } answers {
             val o = firstArg<Order>()
             o.id = 1L
@@ -43,6 +43,7 @@ class OrderServiceTest {
 
         assertThat(resp.status).isEqualTo(OrderStatus.CREATED)
         assertThat(resp.totalAmount).isEqualByComparingTo(BigDecimal("100.00"))
+
         verify {
             outbox.stage(
                 aggregateType = "order",
@@ -52,6 +53,11 @@ class OrderServiceTest {
                 payload = any(),
             )
         }
+        verify {
+            events.publishEvent(OrderCreatedInternalEvent(orderId = 1L, productId = 7, quantity = 2))
+        }
+        // decrementStock must NOT be called inside the transaction — the listener fires after commit.
+        verify(exactly = 0) { products.decrementStock(any(), any()) }
     }
 
     @Test
@@ -64,6 +70,7 @@ class OrderServiceTest {
 
         verify(exactly = 0) { repo.save(any<Order>()) }
         verify(exactly = 0) { outbox.stage(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { events.publishEvent(any()) }
     }
 
     @Test

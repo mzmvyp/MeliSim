@@ -11,6 +11,7 @@ from middleware.correlation import CorrelationIdMiddleware, RequestIdLogFilter
 from middleware.cors import setup_cors
 from middleware.metrics import PrometheusMiddleware, metrics_endpoint
 from middleware.rate_limiter import RateLimiterMiddleware
+from middleware.rate_limiter_redis import RedisRateLimiterMiddleware
 from observability import setup_tracing
 from routes.router import router as gateway_router
 
@@ -36,11 +37,24 @@ app = FastAPI(title="MeliSim API Gateway", version="1.0.0", lifespan=lifespan)
 setup_cors(app)
 setup_tracing(app)
 app.add_middleware(PrometheusMiddleware)
-app.add_middleware(
-    RateLimiterMiddleware,
-    max_requests=int(os.getenv("RATE_LIMIT_PER_MINUTE", "100")),
-    window_seconds=60,
-)
+
+# Prefer Redis-backed rate limiter when REDIS_URL is set (multi-instance safe).
+# Falls back to the in-memory sliding window otherwise (still useful for dev).
+_redis_url = os.getenv("REDIS_URL")
+_rate_limit = int(os.getenv("RATE_LIMIT_PER_MINUTE", "100"))
+if _redis_url:
+    app.add_middleware(
+        RedisRateLimiterMiddleware,
+        redis_url=_redis_url,
+        max_requests=_rate_limit,
+        window_seconds=60,
+    )
+else:
+    app.add_middleware(
+        RateLimiterMiddleware,
+        max_requests=_rate_limit,
+        window_seconds=60,
+    )
 app.add_middleware(AuthMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 

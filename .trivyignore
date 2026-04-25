@@ -1,0 +1,5 @@
+# Vulnerabilities accepted as out-of-scope for this lab project.
+# Each entry: CVE ID — reason — review date.
+#
+# Empty for now. Add entries here only after triage; otherwise the CI fails
+# closed on CRITICAL findings, which is the point.

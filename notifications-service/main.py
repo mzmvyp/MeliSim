@@ -22,7 +22,15 @@ DATABASE_URL = os.getenv(
     "postgresql+asyncpg://melisim:melisim123@localhost:5432/melisim",
 )
 
-engine = create_async_engine(DATABASE_URL, pool_pre_ping=True, echo=False)
+engine = create_async_engine(
+    DATABASE_URL,
+    pool_size=10,
+    max_overflow=10,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    pool_timeout=10,
+    echo=False,
+)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 

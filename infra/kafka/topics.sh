@@ -17,6 +17,14 @@ TOPICS=(
   "product-created"
 )
 
+# DLQ topics get 1 partition (human triage, not throughput) and a longer retention.
+DLQ_TOPICS=(
+  "order-created.dlq"
+  "payment-confirmed.dlq"
+  "payment-failed.dlq"
+  "stock-alert.dlq"
+)
+
 for topic in "${TOPICS[@]}"; do
   kafka-topics --bootstrap-server "$KAFKA_BROKER" \
     --create --if-not-exists \
@@ -24,6 +32,16 @@ for topic in "${TOPICS[@]}"; do
     --partitions 3 \
     --replication-factor 1
   echo "Topic ensured: $topic"
+done
+
+for topic in "${DLQ_TOPICS[@]}"; do
+  kafka-topics --bootstrap-server "$KAFKA_BROKER" \
+    --create --if-not-exists \
+    --topic "$topic" \
+    --partitions 1 \
+    --replication-factor 1 \
+    --config retention.ms=2592000000   # 30 days
+  echo "DLQ topic ensured: $topic"
 done
 
 echo "All MeliSim Kafka topics ready."

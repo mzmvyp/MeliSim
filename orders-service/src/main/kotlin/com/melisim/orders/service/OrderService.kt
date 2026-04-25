@@ -4,11 +4,13 @@ import com.melisim.orders.client.InsufficientStockException
 import com.melisim.orders.client.ProductsClient
 import com.melisim.orders.dto.CreateOrderRequest
 import com.melisim.orders.dto.OrderResponse
+import com.melisim.orders.event.OrderCreatedInternalEvent
 import com.melisim.orders.model.Order
 import com.melisim.orders.model.OrderStatus
 import com.melisim.orders.outbox.OutboxPublisher
 import com.melisim.orders.repository.OrderRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -21,13 +23,18 @@ class OrderService(
     private val repository: OrderRepository,
     private val productsClient: ProductsClient,
     private val outbox: OutboxPublisher,
+    private val events: ApplicationEventPublisher,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Creates an order + stages the `order-created` event in the outbox — all in one DB tx.
-     * The async OutboxPublisherWorker ships the event to Kafka later. This removes the
-     * dual-write hazard (DB commits but Kafka publish fails, or vice versa).
+     * Create + outbox-stage in one DB transaction. The remote stock decrement is
+     * fired AFTER COMMIT via Spring's ApplicationEventPublisher, handled in
+     * [OrderSideEffects]. This way:
+     *   - The DB connection is released BEFORE the HTTP call, so a slow
+     *     products-service doesn't starve the connection pool.
+     *   - If decrementStock fails, the order is already committed — eventually
+     *     consistent, recoverable through the inventory reconciliation job.
      */
     @Transactional
     fun create(req: CreateOrderRequest): OrderResponse {
@@ -61,11 +68,8 @@ class OrderService(
             payload = resp,
         )
 
-        // Stock decrement is a side-effect on another service — run it after the tx commits
-        // to avoid holding our row lock across a remote call.
-        runCatching { productsClient.decrementStock(req.productId, req.quantity) }
-            .onFailure { log.warn("decrementStock failed for product={}: {}", req.productId, it.message) }
-
+        // Hand off the remote side-effect to an after-commit listener.
+        events.publishEvent(OrderCreatedInternalEvent(saved.id!!, req.productId, req.quantity))
         return resp
     }
 

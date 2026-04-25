@@ -107,14 +107,19 @@ docker compose up --build -d
 ./test.sh
 ```
 
-### Ports
+### Ports & what each one shows
 
-| URL | What |
+| URL | What you'll see |
 |---|---|
-| http://localhost:8000/docs | Gateway Swagger |
-| http://localhost:3000 | Grafana (anonymous viewer; admin/admin to edit) — open **MeliSim overview** |
-| http://localhost:9090 | Prometheus |
-| http://localhost:16686 | Jaeger UI |
+| http://localhost:8000/docs | **Gateway Swagger** — every public route, `Try it out`-able |
+| http://localhost:3000 | **Grafana** — open dashboard *MeliSim overview* (RPS, p95 latency, service availability, Kafka events/sec, outbox state) |
+| http://localhost:9090 | **Prometheus** — raw metrics, `Status → Targets` shows whether every service is being scraped |
+| http://localhost:16686 | **Jaeger** — pick `api-gateway` in the service dropdown to see end-to-end traces of a request hopping through 3-4 services |
+| http://localhost:9200 | Elasticsearch HTTP (debug indexed products) |
+| http://localhost:8002/metrics | products-service Prometheus exposition format |
+| http://localhost:8001/actuator/prometheus | users-service via Spring Actuator |
+
+> ⚠️ **This is a lab project.** Defaults like `admin/admin` for Grafana, anonymous Viewer access, hardcoded `JWT_SECRET` in `docker-compose.yml`, and Elasticsearch with `xpack.security.enabled=false` are deliberate to make the stack one-command runnable. **Do not deploy as-is to anything reachable from the internet.** Production checklist: external secrets manager (Vault/Doppler), Grafana SSO, real TLS termination, mTLS between services, and the Kafka cluster sized + ACL'd properly.
 
 ---
 

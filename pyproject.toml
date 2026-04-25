@@ -1,0 +1,34 @@
+# Project-wide ruff config. Each Python service inherits from here when ruff
+# is invoked at the repo root. Pragmatic ruleset: catch real bugs, don't fight
+# style.
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [
+    "**/.venv",
+    "**/venv",
+    "**/__pycache__",
+    "**/.pytest_cache",
+]
+
+[tool.ruff.lint]
+# E/W: pycodestyle errors + warnings
+# F:   pyflakes (unused imports, undefined names — actual bugs)
+# I:   import sorting
+# B:   bugbear (likely-bug patterns)
+# UP:  pyupgrade (modern syntax suggestions)
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = [
+    "E501",  # line length — trust the formatter
+    "B008",  # function call in argument default — FastAPI Depends() is the canonical use
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["F401", "F811"]  # tests can re-import / shadow
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

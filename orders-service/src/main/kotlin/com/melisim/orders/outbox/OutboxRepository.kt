@@ -22,4 +22,12 @@ interface OutboxRepository : JpaRepository<OutboxEvent, Long> {
         ORDER BY e.createdAt ASC
     """)
     fun lockPending(pageable: Pageable): List<OutboxEvent>
+
+    /**
+     * Used by the cleanup job to evict ancient SENT rows. We never delete
+     * FAILED — those are kept around for inspection / replay.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM OutboxEvent e WHERE e.status = com.melisim.orders.outbox.OutboxStatus.SENT AND e.sentAt < :cutoff")
+    fun deleteSentBefore(cutoff: java.time.Instant): Int
 }
