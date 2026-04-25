@@ -233,7 +233,7 @@ Cada handler de tópico:
 3. Ainda falha → publica em `<topic>.dlq` com envelope contendo: `original_topic`, `partition`, `offset`, `key`, `value`, `error_type`, `failed_at`.
 4. **Commit do offset** acontece de qualquer forma — não bloqueia a partição com poison message.
 
-**Tópicos DLQ:** `order-created.dlq`, `payment-confirmed.dlq`, `payment-failed.dlq`, `stock-alert.dlq` (criados em `infra/kafka/topics.sh` com 1 partição + 30 dias de retenção).
+**Tópicos DLQ:** `order-created.dlq`, `payment-confirmed.dlq`, `payment-failed.dlq`, `stock-alert.dlq`, `product-created.dlq`, `stock-updates.dlq` (criados em `infra/kafka/topics.sh` com 1 partição + 30 dias de retenção).
 
 **Pergunta provável:** "Como fazer replay de DLQ?"
 **Resposta:** "Operacional manual: ferramenta consome o DLQ, inspeciona, corrige (ou descarta), republica no tópico original. Em produção real, eu adicionaria um `dlq-replayer` service com endpoint admin."
@@ -451,7 +451,7 @@ orders-service/src/main/kotlin/com/melisim/orders/
 
 ## `.github/workflows/`
 
-- **`ci.yml`** — pipelines paralelas: Python (ruff + pytest+coverage), Java (maven), Kotlin (gradle), Go (build+test+race), compose-config, Trivy fs (CRITICAL=fail) + config (advisory).
+- **`ci.yml`** — pipelines paralelas: Python (ruff + pytest+coverage), Java (maven), Kotlin (gradle), Go (build+test+race), compose-config, Trivy fs/config (advisory no baseline atual).
 
 ## `infra/`
 
@@ -616,6 +616,22 @@ Adicione:
 - Walkthrough do fluxo de pedido (slide 1 do README)
 - Demo: `make up`, abre Grafana, faz um pedido, mostra o trace no Jaeger, mostra o evento no outbox table
 - Discussão de trade-offs: "Por que CQRS leve no search? Por que não Saga full?"
+
+## CI post-mortem (Apr/2026) — bom para entrevista
+
+Correções reais feitas no projeto (exemplo de troubleshooting prático):
+
+1. **Falha em jobs Python por Ruff (`I001`)**
+   - **Causa:** imports fora da ordem em vários serviços.
+   - **Correção:** normalização com Ruff alinhada ao contexto por serviço.
+2. **Falha de testes no `api-gateway` (`ModuleNotFoundError: prometheus_client`)**
+   - **Causa:** novas features (metrics, Redis limiter, tracing) sem dependências no `requirements.txt`.
+   - **Correção:** inclusão explícita de `prometheus-client`, `redis` e libs OpenTelemetry.
+3. **Falha no Trivy action**
+   - **Causa:** referência antiga de action/tag.
+   - **Correção:** upgrade para `aquasecurity/trivy-action@v0.36.0`.
+
+Como apresentar: "não foi só codar feature; fechei o ciclo de engenharia corrigindo pipeline, dependências e supply-chain tooling até o CI ficar verde."
 
 ## Perguntas comuns + respostas modelo
 

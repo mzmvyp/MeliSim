@@ -19,7 +19,7 @@ This is not a toy CRUD. The design includes the patterns you'd expect in a real 
 | **Schema migrations** | Flyway in every JVM service (`V1__`, `V2__` …). `ddl-auto: validate`. No more "Hibernate invents my schema." |
 | **Health model** | `/health/live` (is the process up?) vs `/health/ready` (can the process actually serve traffic? — DB ping, upstream ping, ES ping). Spring services expose Spring Boot Actuator `liveness` and `readiness` probes. |
 | **Graceful shutdown** | Every service honours SIGTERM: drains in-flight requests, stops Kafka consumers, closes DB pools. |
-| **Security on CI** | Trivy filesystem + config scan on every PR (advisory on baseline, enforced thereafter). Ruff + golangci-lint run in CI. |
+| **Security on CI** | Trivy filesystem + config scan on every PR (advisory mode while maintaining a baseline), plus Ruff + golangci-lint gates in CI. |
 | **Caching** | Redis TTL cache in front of `GET /products` with targeted invalidation on writes |
 | **Rate limiting** | Redis-backed sliding window per IP at the gateway when `REDIS_URL` is set (Lua + atomic ZSET); in-memory fallback for local dev without Redis |
 | **Dead-letter queues (DLQ)** | `notifications-service` and `search-service` publish poison/failed messages to `<topic>.dlq` after bounded retries; `infra/kafka/topics.sh` creates every DLQ topic |
@@ -111,6 +111,12 @@ or plain compose:
 docker compose up --build -d
 ./test.sh
 ```
+
+### CI status (current branch)
+
+- Latest CI passes after fixing Python import-order lint issues and missing `api-gateway` runtime deps (`prometheus-client`, `redis`, OpenTelemetry packages).
+- Trivy action uses `aquasecurity/trivy-action@v0.36.0` (working tag).
+- GitHub still shows Node.js 20 deprecation annotations for some actions; these are warnings, not build failures.
 
 ### Ports & what each one shows
 
