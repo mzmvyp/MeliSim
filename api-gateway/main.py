@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+
 from middleware.auth import AuthMiddleware
 from middleware.correlation import CorrelationIdMiddleware, RequestIdLogFilter
 from middleware.cors import setup_cors

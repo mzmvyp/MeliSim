@@ -1,9 +1,9 @@
 import logging
 
-from models.notification import NotificationORM, NotificationResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.notification import NotificationORM, NotificationResponse
 from services import email_service, push_service
 
 log = logging.getLogger("notifications.service")

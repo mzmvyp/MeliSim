@@ -2,8 +2,9 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from consumers.product_consumer import run_consumer
 from fastapi import FastAPI
+
+from consumers.product_consumer import run_consumer
 from observability import install as install_observability
 from routes.search_routes import router as search_router
 from services.search_service import service

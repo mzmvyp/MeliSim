@@ -6,8 +6,9 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from services import notification_service
 from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from services import notification_service
 
 log = logging.getLogger("notifications.consumer")
 

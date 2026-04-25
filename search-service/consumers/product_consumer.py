@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+
 from services.search_service import service
 
 log = logging.getLogger("search.consumer")

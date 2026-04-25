@@ -1,10 +1,11 @@
 import hashlib
 import json
 
-from models.idempotency import IdempotencyKey
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.idempotency import IdempotencyKey
 
 
 def fingerprint(body: dict) -> str:

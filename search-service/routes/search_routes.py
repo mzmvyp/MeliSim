@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Query
+
 from services.search_service import service
 
 router = APIRouter(prefix="/search", tags=["search"])

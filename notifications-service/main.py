@@ -4,12 +4,13 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from consumers.notification_consumer import run_consumer
 from fastapi import Depends, FastAPI, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from consumers.notification_consumer import run_consumer
 from models.notification import Base, NotificationResponse
 from observability import install as install_observability
 from services.notification_service import history
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 logging.basicConfig(
     level=logging.INFO,
