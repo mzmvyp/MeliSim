@@ -27,7 +27,7 @@ class OutboxEvent(
     var payload: String = "{}",
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20)")
     var status: OutboxStatus = OutboxStatus.PENDING,
 ) {
     @Id

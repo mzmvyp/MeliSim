@@ -89,7 +89,6 @@ async def run_consumer(session_factory: async_sessionmaker, stop_event: asyncio.
         auto_offset_reset="earliest",
         enable_auto_commit=False,                 # commit explicitly after handling
         max_poll_records=100,
-        partition_assignment_strategy=("cooperative-sticky",),
     )
 
     dlq_producer = AIOKafkaProducer(bootstrap_servers=brokers, acks="all", enable_idempotence=True)

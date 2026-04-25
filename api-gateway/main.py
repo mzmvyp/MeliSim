@@ -15,6 +15,18 @@ from middleware.rate_limiter_redis import RedisRateLimiterMiddleware
 from observability import setup_tracing
 from routes.router import router as gateway_router
 
+
+_old_factory = logging.getLogRecordFactory()
+
+
+def _record_factory(*args, **kwargs):
+    record = _old_factory(*args, **kwargs)
+    if not hasattr(record, "request_id"):
+        record.request_id = "-"
+    return record
+
+
+logging.setLogRecordFactory(_record_factory)
 logging.basicConfig(
     level=logging.INFO,
     format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","request_id":"%(request_id)s","msg":"%(message)s"}',

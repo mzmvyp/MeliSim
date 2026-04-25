@@ -11,6 +11,8 @@ JWT_ALGORITHM = "HS256"
 
 PUBLIC_PATHS: Iterable[str] = (
     "/health",
+    "/health/live",
+    "/health/ready",
     "/docs",
     "/openapi.json",
     "/redoc",

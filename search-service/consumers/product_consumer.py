@@ -88,7 +88,6 @@ async def run_consumer(stop_event: asyncio.Event) -> None:
         auto_offset_reset="earliest",
         enable_auto_commit=False,
         max_poll_records=100,
-        partition_assignment_strategy=("cooperative-sticky",),
     )
     dlq_producer = AIOKafkaProducer(bootstrap_servers=brokers, acks="all", enable_idempotence=True)
 
