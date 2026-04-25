@@ -70,3 +70,21 @@ async def test_index_product_swallows_errors():
     svc.client.index = AsyncMock(side_effect=RuntimeError("es down"))
     # Should not raise — indexing failures are logged.
     await svc.index_product({"id": 1, "title": "Book"})
+
+
+@pytest.mark.asyncio
+async def test_index_product_strict_raises():
+    svc = SearchService()
+    svc.client = MagicMock()
+    svc.client.index = AsyncMock(side_effect=RuntimeError("es down"))
+    with pytest.raises(RuntimeError, match="es down"):
+        await svc.index_product({"id": 1, "title": "Book"}, strict=True)
+
+
+@pytest.mark.asyncio
+async def test_update_product_stock_strict_raises():
+    svc = SearchService()
+    svc.client = MagicMock()
+    svc.client.update = AsyncMock(side_effect=RuntimeError("es down"))
+    with pytest.raises(RuntimeError, match="es down"):
+        await svc.update_product_stock(1, 5, strict=True)

@@ -2,13 +2,12 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-from sqlalchemy.ext.asyncio import async_sessionmaker
-
 from services import notification_service
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 log = logging.getLogger("notifications.consumer")
 
@@ -40,7 +39,7 @@ async def _publish_dlq(producer: AIOKafkaProducer, original_topic: str, msg, err
         "original_value": msg.value.decode("utf-8", errors="replace"),
         "error": str(err),
         "error_type": type(err).__name__,
-        "failed_at": datetime.now(timezone.utc).isoformat(),
+        "failed_at": datetime.now(UTC).isoformat(),
     }
     try:
         await producer.send_and_wait(
@@ -106,7 +105,7 @@ async def run_consumer(session_factory: async_sessionmaker, stop_event: asyncio.
         while not stop_event.is_set():
             try:
                 batch = await asyncio.wait_for(consumer.getmany(timeout_ms=1000), timeout=2)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
             for tp, messages in batch.items():

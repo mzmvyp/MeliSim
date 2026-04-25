@@ -21,7 +21,9 @@ This is not a toy CRUD. The design includes the patterns you'd expect in a real 
 | **Graceful shutdown** | Every service honours SIGTERM: drains in-flight requests, stops Kafka consumers, closes DB pools. |
 | **Security on CI** | Trivy filesystem + config scan on every PR (advisory on baseline, enforced thereafter). Ruff + golangci-lint run in CI. |
 | **Caching** | Redis TTL cache in front of `GET /products` with targeted invalidation on writes |
-| **Rate limiting** | Sliding-window per IP at the gateway |
+| **Rate limiting** | Redis-backed sliding window per IP at the gateway when `REDIS_URL` is set (Lua + atomic ZSET); in-memory fallback for local dev without Redis |
+| **Dead-letter queues (DLQ)** | `notifications-service` and `search-service` publish poison/failed messages to `<topic>.dlq` after bounded retries; `infra/kafka/topics.sh` creates every DLQ topic |
+| **Order side-effects** | Stock decrement runs **after commit** (`OrderSideEffects` + Spring event) so the DB transaction is not held during HTTP to `products-service` |
 
 ---
 
@@ -89,6 +91,9 @@ This is not a toy CRUD. The design includes the patterns you'd expect in a real 
 - `stock-updates` — producer: products; consumer: search
 - `product-created` — producer: products; consumer: search
 - `stock-alert` — producer: stock-monitor; consumer: notifications
+
+**DLQ topics** (created by `infra/kafka/topics.sh`, 1 partition, 30-day retention):  
+`order-created.dlq`, `payment-confirmed.dlq`, `payment-failed.dlq`, `stock-alert.dlq`, `product-created.dlq`, `stock-updates.dlq` — used when a consumer exhausts retries or JSON parsing fails; envelope includes original topic/partition/offset, payload, and error.
 
 ---
 
@@ -233,7 +238,6 @@ These would be the next round of improvements:
 
 - **Integration tests with Testcontainers** — unit tests + the compose smoke test cover most of the risk for now.
 - **Service mesh / mTLS between services** — the gateway checks JWT; internal hops trust the network.
-- **Distributed rate limiter** (Redis-backed) — current is in-memory, single-instance.
 - **Kubernetes manifests / Helm charts** — docker-compose is the deployment model.
 - **Saga compensation** — order/payment flow has no rollback path for partial failures beyond `payment-failed → CANCELLED`.
 - **Contract tests** (Pact) between gateway and each service.

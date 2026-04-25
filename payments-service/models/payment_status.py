@@ -1,14 +1,14 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class PaymentStatus(str, Enum):
+class PaymentStatus(StrEnum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     CONFIRMED = "CONFIRMED"
     FAILED = "FAILED"
 
 
-class PaymentMethod(str, Enum):
+class PaymentMethod(StrEnum):
     CREDIT_CARD = "credit_card"
     PIX = "pix"
     BOLETO = "boleto"

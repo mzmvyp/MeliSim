@@ -1,16 +1,15 @@
 import asyncio
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
-
-from fastapi import Depends, FastAPI, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from consumers.notification_consumer import run_consumer
+from fastapi import Depends, FastAPI, HTTPException
 from models.notification import Base, NotificationResponse
 from observability import install as install_observability
 from services.notification_service import history
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,7 +54,7 @@ async def lifespan(app: FastAPI):
     if _consumer_task is not None:
         try:
             await asyncio.wait_for(_consumer_task, timeout=5)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _consumer_task.cancel()
     await engine.dispose()
 
@@ -76,8 +75,8 @@ async def health_live():
 
 @app.get("/health/ready")
 async def health_ready():
-    from sqlalchemy import text
     from fastapi.responses import JSONResponse
+    from sqlalchemy import text
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))

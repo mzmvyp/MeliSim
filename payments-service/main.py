@@ -1,16 +1,15 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-from sqlalchemy import text
-
 from db import engine
 from events.payment_events import publisher
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from models.idempotency import IdempotencyKey  # noqa: F401 — register on Base.metadata
 from models.payment import Base
 from observability import install as install_observability
 from routes.payment_routes import router as payments_router
+from sqlalchemy import text
 
 logging.basicConfig(
     level=logging.INFO,

@@ -18,11 +18,16 @@ TOPICS=(
 )
 
 # DLQ topics get 1 partition (human triage, not throughput) and a longer retention.
+# Keep in sync with every consumer that publishes to <topic>.dlq:
+#   notifications-service → order-created, payment-*, stock-alert
+#   search-service        → product-created, stock-updates
 DLQ_TOPICS=(
   "order-created.dlq"
   "payment-confirmed.dlq"
   "payment-failed.dlq"
   "stock-alert.dlq"
+  "product-created.dlq"
+  "stock-updates.dlq"
 )
 
 for topic in "${TOPICS[@]}"; do

@@ -2,9 +2,8 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-
 from consumers.product_consumer import run_consumer
+from fastapi import FastAPI
 from observability import install as install_observability
 from routes.search_routes import router as search_router
 from services.search_service import service
@@ -29,7 +28,7 @@ async def lifespan(app: FastAPI):
     if _consumer_task is not None:
         try:
             await asyncio.wait_for(_consumer_task, timeout=5)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _consumer_task.cancel()
     await service.close()
 

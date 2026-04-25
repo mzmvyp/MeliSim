@@ -1,10 +1,9 @@
 import logging
-from typing import Optional
 
+from models.notification import NotificationORM, NotificationResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.notification import NotificationORM, NotificationResponse
 from services import email_service, push_service
 
 log = logging.getLogger("notifications.service")
@@ -15,8 +14,8 @@ async def record(
     user_id: int,
     channel: str,
     event_type: str,
-    subject: Optional[str],
-    body: Optional[str],
+    subject: str | None,
+    body: str | None,
 ) -> NotificationORM:
     row = NotificationORM(
         user_id=user_id,

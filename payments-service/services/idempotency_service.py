@@ -1,12 +1,10 @@
 import hashlib
 import json
-from typing import Optional
 
+from models.idempotency import IdempotencyKey
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from models.idempotency import IdempotencyKey
 
 
 def fingerprint(body: dict) -> str:
@@ -20,7 +18,7 @@ class IdempotencyConflict(Exception):
     """Same key reused with a DIFFERENT body — 422."""
 
 
-async def get_stored(session: AsyncSession, key: str) -> Optional[IdempotencyKey]:
+async def get_stored(session: AsyncSession, key: str) -> IdempotencyKey | None:
     result = await session.execute(
         select(IdempotencyKey).where(IdempotencyKey.idempotency_key == key)
     )

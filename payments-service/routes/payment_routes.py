@@ -1,9 +1,7 @@
 import json
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from db import get_session
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from models.payment import PaymentCreateRequest, PaymentResponse
 from services.idempotency_service import (
     IdempotencyConflict,
@@ -17,6 +15,7 @@ from services.payment_service import (
     get_payment,
     list_by_order,
 )
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -46,9 +45,9 @@ async def create(
     try:
         payment = await create_payment(session, req)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except IdempotencyConflict as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
 
     if idempotency_key:
         await store(
@@ -68,7 +67,7 @@ async def get(payment_id: int, session: AsyncSession = Depends(get_session)):
     try:
         return await get_payment(session, payment_id)
     except PaymentNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/order/{order_id}", response_model=list[PaymentResponse])

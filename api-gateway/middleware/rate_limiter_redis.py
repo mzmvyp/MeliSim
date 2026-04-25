@@ -18,7 +18,6 @@ from __future__ import annotations
 import logging
 import secrets
 import time
-from typing import Optional
 
 import redis.asyncio as redis_async
 from fastapi import Request
@@ -61,8 +60,8 @@ class RedisRateLimiterMiddleware(BaseHTTPMiddleware):
         self.max_requests = max_requests
         self.window = window_seconds
         self.key_prefix = key_prefix
-        self.client: Optional[redis_async.Redis] = None
-        self._script_sha: Optional[str] = None
+        self.client: redis_async.Redis | None = None
+        self._script_sha: str | None = None
         try:
             self.client = redis_async.from_url(
                 f"redis://{redis_url}", decode_responses=True, socket_timeout=0.5

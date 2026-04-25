@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from models.payment import Base
+from models.payment import Base, PaymentCreateRequest
 from models.payment_status import PaymentMethod, PaymentStatus
-from models.payment import PaymentCreateRequest
 from services.payment_service import (
     PROCESSING_DELAY_SECONDS,
     PaymentNotFoundError,
@@ -61,13 +61,13 @@ async def test_create_payment_failed_above_threshold(session):
 
 @pytest.mark.asyncio
 async def test_create_payment_invalid_method_rejected():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         PaymentCreateRequest(order_id=1, amount=Decimal("10"), method="bitcoin")  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
 async def test_create_payment_negative_amount_rejected():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         PaymentCreateRequest(order_id=1, amount=Decimal("-10"), method=PaymentMethod.PIX)
 
 

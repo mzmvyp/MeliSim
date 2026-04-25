@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Optional
 
 from elasticsearch import AsyncElasticsearch
 
@@ -40,7 +39,7 @@ _MAPPINGS = {
 
 
 class SearchService:
-    def __init__(self, es_url: Optional[str] = None) -> None:
+    def __init__(self, es_url: str | None = None) -> None:
         url = es_url or os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
         self.client = AsyncElasticsearch(hosts=[url])
 
@@ -53,7 +52,7 @@ class SearchService:
         except Exception as e:
             log.warning("could not ensure index: %s", e)
 
-    async def index_product(self, product: dict) -> None:
+    async def index_product(self, product: dict, *, strict: bool = False) -> None:
         pid = product.get("id")
         if pid is None:
             log.warning("product missing id, skipping index")
@@ -62,14 +61,30 @@ class SearchService:
             await self.client.index(index=INDEX, id=str(pid), document=product, refresh="wait_for")
             log.info("indexed product id=%s", pid)
         except Exception as e:
+            if strict:
+                raise
             log.warning("index failed id=%s: %s", pid, e)
+
+    async def update_product_stock(self, product_id: int, stock: int, *, strict: bool = False) -> None:
+        try:
+            await self.client.update(
+                index=INDEX,
+                id=str(product_id),
+                body={"doc": {"stock": stock}},
+                refresh="wait_for",
+            )
+            log.info("updated stock in index id=%s stock=%s", product_id, stock)
+        except Exception as e:
+            if strict:
+                raise
+            log.warning("stock update failed id=%s: %s", product_id, e)
 
     async def search(
         self,
         q: str = "",
-        category: Optional[str] = None,
-        min_price: Optional[float] = None,
-        max_price: Optional[float] = None,
+        category: str | None = None,
+        min_price: float | None = None,
+        max_price: float | None = None,
         size: int = 20,
     ) -> list[dict]:
         must: list[dict] = []

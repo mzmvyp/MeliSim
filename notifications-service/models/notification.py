@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 from sqlalchemy import Column, DateTime, Integer, String, Text
@@ -25,8 +24,8 @@ class NotificationResponse(BaseModel):
     user_id: int
     channel: str
     event_type: str
-    subject: Optional[str] = None
-    body: Optional[str] = None
+    subject: str | None = None
+    body: str | None = None
     created_at: datetime
 
     @classmethod

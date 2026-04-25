@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-from typing import Optional
 
 from aiokafka import AIOKafkaProducer
 
@@ -9,9 +8,9 @@ log = logging.getLogger("payments.events")
 
 
 class KafkaPublisher:
-    def __init__(self, brokers: Optional[str] = None) -> None:
+    def __init__(self, brokers: str | None = None) -> None:
         self.brokers = brokers or os.getenv("KAFKA_BROKERS", "localhost:9092")
-        self._producer: Optional[AIOKafkaProducer] = None
+        self._producer: AIOKafkaProducer | None = None
 
     async def start(self) -> None:
         try:

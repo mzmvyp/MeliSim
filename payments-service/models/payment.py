@@ -1,6 +1,5 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import Column, DateTime, Integer, Numeric, String
@@ -43,7 +42,7 @@ class PaymentResponse(BaseModel):
     method: str
     status: PaymentStatus
     created_at: datetime
-    processed_at: Optional[datetime] = None
+    processed_at: datetime | None = None
 
     @classmethod
     def from_orm_row(cls, row: PaymentORM) -> "PaymentResponse":
