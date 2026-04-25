@@ -2,6 +2,8 @@
 
 Documento completo do sistema, escrito para você **estudar e apresentar** o projeto em uma entrevista técnica. Cobre arquitetura, decisões, padrões implementados, e walkthrough de cada arquivo.
 
+**Outros documentos:** [README.md](README.md) (quickstart e portas) · [ARCHITECTURE.md](ARCHITECTURE.md) (diagramas, mapa de dados e Kafka, pilha do gateway).
+
 ---
 
 ## Sumário
@@ -25,6 +27,7 @@ Documento completo do sistema, escrito para você **estudar e apresentar** o pro
   - 14. Correlation ID + distributed tracing
   - 15. Health checks live/ready
   - 16. Graceful shutdown
+  - 17. Scrape autenticado de métricas (Prometheus → api-gateway)
 - **[Parte IV — Tour pelos Serviços](#parte-iv--tour-pelos-serviços)**
 - **[Parte V — Catálogo de Arquivos](#parte-v--catálogo-de-arquivos)**
 - **[Parte VI — Como Apresentar na Entrevista](#parte-vi--como-apresentar-na-entrevista)**
@@ -296,6 +299,23 @@ Toda aplicação trata SIGTERM:
 
 **Por que importa:** durante deploy/scale-down, o pod ganha SIGTERM. Sem graceful, requests in-flight ganham 502. Com, drenam até 15s antes do SIGKILL.
 
+## 17. Scrape autenticado de métricas (Prometheus → api-gateway)
+
+**Problema:** expor `GET /metrics` sem autenticação na mesma porta que a API facilita o scrape, mas em ambientes reais métricas podem vazar cardinalidade ou labels sensíveis; o scrape público sem credencial é fraco.
+
+**Solução neste repo:**
+
+1. Ficheiro partilhado `infra/prometheus/secrets/gateway-metrics.token` (uma linha, segredo de **lab** — trocar em produção).
+2. `docker-compose.yml` monta o mesmo ficheiro em:
+   - **api-gateway** como `/run/secrets/gateway-metrics.token` + env `METRICS_SCRAPE_TOKEN_FILE`;
+   - **prometheus** como `/etc/prometheus/secrets/gateway-metrics.token`.
+3. `middleware/auth.py`: em `GET /metrics`, se o header `Authorization: Bearer …` coincidir com o token (`secrets.compare_digest`), a request segue; caso contrário aplica-se a mesma regra JWT que no resto da API (sem token → 401).
+4. `infra/prometheus/prometheus.yml`: no job `api-gateway`, bloco `authorization: { type: Bearer, credentials_file: … }`.
+
+**Prometheus UI:** `Status → Targets` — o job `api-gateway` deve aparecer **UP** quando o stack está correto.
+
+**Detalhe de implementação:** `main.py` define um `LogRecordFactory` que garante `request_id` em todos os `LogRecord` antes do primeiro log no lifespan (evita `ValueError` no formato JSON quando ainda não há request HTTP).
+
 ---
 
 # Parte IV — Tour pelos Serviços
@@ -304,16 +324,17 @@ Toda aplicação trata SIGTERM:
 
 **Responsabilidade:** ponto único de entrada da rede pública. Não tem lógica de domínio.
 
-**Camadas (de fora pra dentro do request):**
-1. `CorrelationIdMiddleware` — gera/propaga `X-Request-ID`
-2. `AuthMiddleware` — valida JWT (rotas listadas em `PUBLIC_PATHS` passam)
-3. `RedisRateLimiterMiddleware` ou `RateLimiterMiddleware` — escolhido pelo `REDIS_URL`
-4. `PrometheusMiddleware` — registra latência + count
-5. CORS
-6. OpenTelemetry FastAPI instrumentor + httpx instrumentor
-7. Router → `_proxy()` → `httpx.AsyncClient` (singleton no app.state)
+**Camadas (entrada HTTP — último `add_middleware` corre primeiro):** `CorrelationIdMiddleware` → `AuthMiddleware` → rate limit → `PrometheusMiddleware` → por baixo ficam CORS (registado cedo em `setup_cors`), instrumentação OpenTelemetry e rotas.
 
-**O que destacar em entrevista:** "Não invento headers — `X-Request-ID` é repassado para todos os upstreams. Auth para na borda. Rate limit é distribuído via Redis Lua script."
+1. `CorrelationIdMiddleware` — gera ou honra `X-Request-ID`.
+2. `AuthMiddleware` — JWT HS256; `PUBLIC_PATHS` inclui `/health`, `/health/live`, `/health/ready`, `/docs`, login/register, GET de produtos; **`GET /metrics`** aceita Bearer de **scrape** (`METRICS_SCRAPE_TOKEN_FILE` / `METRICS_SCRAPE_TOKEN`) com comparação em tempo constante.
+3. `RedisRateLimiterMiddleware` ou `RateLimiterMiddleware` — conforme `REDIS_URL`.
+4. `PrometheusMiddleware` — latência + contadores HTTP.
+5. `CORSMiddleware` — lab com origens abertas.
+6. OpenTelemetry (FastAPI + httpx) quando `OTEL_EXPORTER_OTLP_ENDPOINT` está definido.
+7. Router → `_proxy()` → `httpx.AsyncClient` no `app.state`.
+
+**O que destacar em entrevista:** "`X-Request-ID` propagado aos upstreams; auth na borda; rate limit distribuído com Redis + Lua; métricas do gateway protegidas com token de máquina para o Prometheus, não JWT de utilizador."
 
 ## users-service (Java/Spring Boot, porta 8001)
 
@@ -441,9 +462,10 @@ orders-service/src/main/kotlin/com/melisim/orders/
 ## Raiz
 
 - **`README.md`** — visão de produto, quickstart, endpoints, padrões.
+- **`ARCHITECTURE.md`** — arquitetura detalhada (diagramas Mermaid, mapa Kafka/dados, pilha do gateway).
 - **`STUDY_GUIDE.md`** — este arquivo.
 - **`Makefile`** — `make up / down / smoke / test / lint / obs-open / clean`.
-- **`docker-compose.yml`** — 13 serviços (8 app + Kafka, ZK, MySQL, Postgres, Redis, ES + Prometheus, Grafana, Jaeger).
+- **`docker-compose.yml`** — 18 serviços definidos (8 app + ZooKeeper, Kafka, `kafka-init` one-shot, MySQL, Postgres, Redis, ES + Prometheus, Grafana, Jaeger); volumes para o token de scrape do gateway.
 - **`test.sh`** — smoke test end-to-end (registra → cria pedido → paga → verifica PAID).
 - **`.gitignore`** — Python/JVM/Go artifacts.
 - **`pyproject.toml`** — config raiz do ruff (regras E,W,F,I,B,UP).
@@ -451,7 +473,7 @@ orders-service/src/main/kotlin/com/melisim/orders/
 
 ## `.github/workflows/`
 
-- **`ci.yml`** — pipelines paralelas: Python (ruff + pytest+coverage), Java (maven), Kotlin (gradle), Go (build+test+race), compose-config, Trivy fs/config (advisory no baseline atual).
+- **`ci.yml`** — pipelines paralelas: Python (ruff **enforced** + pytest+coverage), Java (maven), Kotlin (**`./gradlew test`**), Go (build+test+`-race`), `docker compose config -q`, Trivy fs/config com **`exit-code: "0"`** (modo **advisory** — não falha o job por CVE; rever quando houver baseline).
 
 ## `infra/`
 
@@ -460,7 +482,8 @@ orders-service/src/main/kotlin/com/melisim/orders/
 - **`redis/redis.conf`** — bind, maxmemory 256mb, allkeys-lru.
 - **`kafka/topics.sh`** — cria todos os tópicos de aplicação + DLQ (1 partição, 30d retenção).
 - **`elasticsearch/mappings.json`** — settings com analyzer customizado.
-- **`prometheus/prometheus.yml`** — scrape configs para os 8 serviços.
+- **`prometheus/prometheus.yml`** — scrape dos 8 alvos de aplicação + `stock-monitor`; job **`api-gateway`** com `authorization.credentials_file` (Bearer) para `/metrics`.
+- **`prometheus/secrets/gateway-metrics.token`** + **`README.txt`** — segredo partilhado de scrape (lab); em produção usar secret manager e não versionar o token real.
 - **`grafana/provisioning/datasources/prometheus.yml`** — Prometheus + Jaeger pré-configurados.
 - **`grafana/provisioning/dashboards/dashboards.yml`** — provider para auto-load.
 - **`grafana/dashboards/melisim-overview.json`** — dashboard com 5 painéis (RPS por serviço, p95 latency, availability, Kafka events/sec, outbox state).
@@ -470,16 +493,16 @@ orders-service/src/main/kotlin/com/melisim/orders/
 - **`Dockerfile`** — Python 3.11 slim, requirements, healthcheck.
 - **`requirements.txt`** — fastapi, uvicorn, httpx, jose, passlib, prometheus-client, opentelemetry, redis, pytest.
 - **`.dockerignore`** — exclui `__pycache__`, `tests/`, `.git/`.
-- **`main.py`** — FastAPI app, monta middlewares na ordem certa (Correlation → Auth → RateLimit → Prometheus → CORS), `/health/live`, `/health/ready` (verifica users-service), `/metrics`, lifespan com httpx singleton.
+- **`main.py`** — FastAPI app: `LogRecordFactory` com `request_id` default, logging JSON, `setup_cors` + tracing + middlewares na ordem registada em Starlette (entrada: **Correlation → Auth → rate limit → Prometheus**; CORS/OTel mais perto da app), `/health/live`, `/health/ready` (ping `users-service`), `/metrics`, lifespan com `httpx.AsyncClient`.
 - **`observability.py`** — wiring OpenTelemetry (TracerProvider + OTLP HTTP exporter + FastAPIInstrumentor + HTTPXInstrumentor).
-- **`middleware/auth.py`** — `AuthMiddleware`. Valida JWT exceto para `PUBLIC_PATHS` (login, register, products GET).
+- **`middleware/auth.py`** — `AuthMiddleware`: JWT exceto `PUBLIC_PATHS`; **`GET /metrics`** com Bearer de scrape (`METRICS_SCRAPE_TOKEN_FILE` ou env) via `secrets.compare_digest`.
 - **`middleware/correlation.py`** — `CorrelationIdMiddleware` + `RequestIdLogFilter` para o JSON log format.
 - **`middleware/cors.py`** — wrapper `setup_cors`.
 - **`middleware/rate_limiter.py`** — sliding window in-memory (fallback dev).
 - **`middleware/rate_limiter_redis.py`** — Lua-based sliding window distribuído.
 - **`middleware/metrics.py`** — `PrometheusMiddleware` + `metrics_endpoint()`. Counter `http_requests_total{method,path,status}` + Histogram `http_request_duration_seconds`.
 - **`routes/router.py`** — proxy reverso. `_proxy()` repassa método/headers/body/query, **propaga `x-request-id`**. Mapeia `/api/v1/*` para upstreams via env vars.
-- **`tests/test_gateway.py`** — health, auth missing, auth invalid, rate limit, valid token bypass.
+- **`tests/test_gateway.py`** — health, auth em rotas protegidas, rate limit, token JWT válido, **`/metrics`** com token de scrape (`monkeypatch`).
 
 ## `users-service/` (Java/Spring Boot)
 
@@ -533,7 +556,7 @@ orders-service/src/main/kotlin/com/melisim/orders/
 - **`repository/OrderRepository.kt`** — JpaRepository + `findByBuyerId`.
 - **`dto/OrderDTO.kt`** — `CreateOrderRequest` (com Bean Validation), `OrderResponse.from(Order)`, `UpdateStatusRequest`.
 - **`client/ProductsClient.kt`** — RestClient com timeouts explícitos (connect 2s, read 3s), `@CircuitBreaker(fallback)` + `@Retry`. Lança `ProductNotFoundException`/`InsufficientStockException`/`ProductsUnavailableException`.
-- **`outbox/OutboxEvent.kt`** — `@Entity`, payload é `JdbcTypeCode(SqlTypes.JSON)`. Status PENDING/SENT/FAILED.
+- **`outbox/OutboxEvent.kt`** — `@Entity`, payload `JdbcTypeCode(SqlTypes.JSON)`. `OutboxStatus` com `@Enumerated(STRING)` e `columnDefinition = "varchar(20)"` para alinhar com Flyway (`VARCHAR`) sob **`ddl-auto: validate`** no MySQL.
 - **`outbox/OutboxRepository.kt`** — `lockPending` com `@Lock(PESSIMISTIC_WRITE)` + `deleteSentBefore` `@Modifying`.
 - **`outbox/OutboxPublisher.kt`** — `@Transactional(MANDATORY)` — só funciona dentro de tx existente, força chamador a estar transacional.
 - **`outbox/OutboxPublisherWorker.kt`** — `@Scheduled(fixedDelay)`, pipeline send (todas as futures em paralelo, depois `.get()`), gauge de pendentes, timer de drain duration.
@@ -572,7 +595,7 @@ orders-service/src/main/kotlin/com/melisim/orders/
 - **`services/email_service.py`** — Jinja2 environment, `render(template, **ctx)` + `send_email` (printa no console — simulação).
 - **`services/push_service.py`** — `send_push` simulado.
 - **`services/notification_service.py`** — handlers por tópico (`dispatch_order_created`, `dispatch_payment_confirmed`, `dispatch_payment_failed`, `dispatch_stock_alert`) + `record` (escreve no DB) + `history`.
-- **`consumers/notification_consumer.py`** — `run_consumer` com retry interno (3x backoff exp), DLQ producer separado, manual offset commit.
+- **`consumers/notification_consumer.py`** — `run_consumer` com retry interno (3x backoff), DLQ producer separado, commit manual de offset; **consumer Kafka usa assignor por defeito** do cliente (não `partition_assignment_strategy` em formato inválido para aiokafka).
 - **`templates/order_confirmed.html`** + **`payment_confirmed.html`** + **`payment_failed.html`** + **`stock_alert.html`** — Jinja2.
 - **`tests/test_notifications.py`** — 4 testes async com SQLite in-memory.
 
@@ -583,7 +606,7 @@ orders-service/src/main/kotlin/com/melisim/orders/
 - **`observability.py`** — idem.
 - **`services/search_service.py`** — classe `SearchService`. `_MAPPINGS` com analyzer + completion field. `ensure_index`, `index_product`, `search` (bool query com multi_match + filters), `suggest` (completion suggester).
 - **`routes/search_routes.py`** — `GET /search` + `GET /search/suggestions`.
-- **`consumers/product_consumer.py`** — consume `product-created` (indexa) + `stock-updates` (update parcial via doc).
+- **`consumers/product_consumer.py`** — consome `product-created` (indexa) + `stock-updates` (update parcial); retry + DLQ + commit manual (mesmo padrão que notifications).
 - **`tests/test_search.py`** — 5 testes mockando `client.search`/`client.index`.
 
 ## `stock-monitor/` (Go)
@@ -609,7 +632,7 @@ orders-service/src/main/kotlin/com/melisim/orders/
 Adicione:
 - "Cada serviço foi escrito na linguagem que melhor encaixa: Go nos hot-paths de catálogo e no worker scheduled, Kotlin no orders porque o domínio é rico em transições de estado, Python nos serviços I/O-heavy."
 - "O orders-service é o que mais demonstra senioridade: Outbox pattern (resolve dual-write), Resilience4j na chamada para products (CB + Retry + Bulkhead), e o decrementStock acontece em `@TransactionalEventListener(AFTER_COMMIT)` para não prender conexão durante HTTP."
-- "Tudo passa por CI multi-linguagem com Trivy filesystem scan que falha em CRITICAL — supply chain security é cidadão de primeira classe."
+- "CI multi-linguagem com lint e testes enforced; Trivy filesystem + config em **modo advisory** (`exit-code: 0`) para não bloquear o merge até termos baseline de CVE — o relatório continua visível no log da pipeline."
 
 ### 5 minutos
 Adicione:
@@ -629,9 +652,15 @@ Correções reais feitas no projeto (exemplo de troubleshooting prático):
    - **Correção:** inclusão explícita de `prometheus-client`, `redis` e libs OpenTelemetry.
 3. **Falha no Trivy action**
    - **Causa:** referência antiga de action/tag.
-   - **Correção:** upgrade para `aquasecurity/trivy-action@v0.36.0`.
+   - **Correção:** upgrade para `aquasecurity/trivy-action@v0.36.0`; scans fs/config com **`exit-code: "0"`** para modo advisory até existir baseline de CVE.
+4. **`orders-service` em loop no Docker (schema validation)**
+   - **Causa:** coluna `outbox_events.status` como `VARCHAR` no Flyway vs Hibernate a esperar tipo ENUM nativo do MySQL.
+   - **Correção:** `OutboxEvent` com `columnDefinition = "varchar(20)"` alinhado ao SQL.
+5. **Scrape Prometheus no `api-gateway` com 401**
+   - **Causa:** `AuthMiddleware` exigia JWT em `/metrics`.
+   - **Correção:** token de máquina partilhado via ficheiro montado + `authorization.credentials_file` no Prometheus.
 
-Como apresentar: "não foi só codar feature; fechei o ciclo de engenharia corrigindo pipeline, dependências e supply-chain tooling até o CI ficar verde."
+Como apresentar: "não foi só codar feature; fechei o ciclo de engenharia corrigindo pipeline, dependências, schema validate, observabilidade e supply-chain tooling até o stack e o CI refletirem o estado real."
 
 ## Perguntas comuns + respostas modelo
 
@@ -674,7 +703,7 @@ Como apresentar: "não foi só codar feature; fechei o ciclo de engenharia corri
 > "Três camadas:
 > - **Unit**: cada serviço tem 4-8 testes (pytest, JUnit/Mockito, MockK, Go testing). Mockam dependências externas.
 > - **Smoke E2E**: `test.sh` sobe a stack e roda registro → cria 5 produtos → busca → cria pedido → paga → verifica PAID → mostra histórico de notificações. Cobre o fluxo principal.
-> - **CI**: GitHub Actions roda lint (ruff enforced, golangci-lint), tests com cobertura, Trivy fs scan (CRITICAL=fail), compose config validation.
+> - **CI**: GitHub Actions roda lint (ruff enforced, golangci-lint), testes com cobertura, Trivy fs/config (**advisory**, não falha o job no baseline atual), validação `docker compose config -q`.
 > O que falta: integration tests com Testcontainers — documentei como próximo passo."
 
 ## Demo plan (5 min ao vivo)
@@ -716,4 +745,4 @@ Como apresentar: "não foi só codar feature; fechei o ciclo de engenharia corri
 
 ---
 
-**Fim.** Esse documento é vivo — quando adicionar Testcontainers, Saga, mTLS, atualize aqui. Se um entrevistador pedir pra explicar alguma parte específica, abra direto na seção e siga.
+**Fim.** Esse documento é vivo — quando adicionar Testcontainers, Saga, mTLS, endurecer Trivy para `exit-code: 1` com `.trivyignore` curado, atualize aqui. Para diagramas e mapa de dados/Kafka em detalhe, use **[ARCHITECTURE.md](ARCHITECTURE.md)**. Se um entrevistador pedir uma parte específica, abra a secção correspondente e siga.

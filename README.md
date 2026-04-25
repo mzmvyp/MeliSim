@@ -4,6 +4,14 @@ Simulated Mercado Livre ecosystem — a polyglot, event-driven microservices pla
 
 Eight services in four languages (Python, Java, Kotlin, Go) coordinate through REST and Kafka, backed by MySQL, PostgreSQL, Redis, and Elasticsearch, and observed end-to-end with Prometheus, Grafana, and Jaeger.
 
+**Documentation map**
+
+| Document | Purpose |
+|----------|---------|
+| **This README** | Quickstart, ports, purchase walk-through, pattern index |
+| **[ARCHITECTURE.md](ARCHITECTURE.md)** | Deep dive: data ownership, Kafka map, gateway middleware order, observability wiring |
+| **[STUDY_GUIDE.md](STUDY_GUIDE.md)** | Interview prep: trade-offs, file-by-file tour, glossary |
+
 ---
 
 ## What's here (and why it matters)
@@ -19,7 +27,8 @@ This is not a toy CRUD. The design includes the patterns you'd expect in a real 
 | **Schema migrations** | Flyway in every JVM service (`V1__`, `V2__` …). `ddl-auto: validate`. No more "Hibernate invents my schema." |
 | **Health model** | `/health/live` (is the process up?) vs `/health/ready` (can the process actually serve traffic? — DB ping, upstream ping, ES ping). Spring services expose Spring Boot Actuator `liveness` and `readiness` probes. |
 | **Graceful shutdown** | Every service honours SIGTERM: drains in-flight requests, stops Kafka consumers, closes DB pools. |
-| **Security on CI** | Trivy filesystem + config scan on every PR (advisory mode while maintaining a baseline), plus Ruff + golangci-lint gates in CI. |
+| **Security on CI** | Trivy filesystem + config scan on every PR (**advisory** — `exit-code: 0` so the pipeline stays green while surfacing HIGH/CRITICAL in logs), plus Ruff + golangci-lint **enforced** on Python and tests on all languages. |
+| **Metrics scrape (gateway)** | Prometheus scrapes `GET /metrics` on `api-gateway` using a **dedicated Bearer token** (`infra/prometheus/secrets/gateway-metrics.token`), not a user JWT — same secret file mounted into the gateway (`METRICS_SCRAPE_TOKEN_FILE`) and Prometheus (`authorization.credentials_file`). |
 | **Caching** | Redis TTL cache in front of `GET /products` with targeted invalidation on writes |
 | **Rate limiting** | Redis-backed sliding window per IP at the gateway when `REDIS_URL` is set (Lua + atomic ZSET); in-memory fallback for local dev without Redis |
 | **Dead-letter queues (DLQ)** | `notifications-service` and `search-service` publish poison/failed messages to `<topic>.dlq` after bounded retries; `infra/kafka/topics.sh` creates every DLQ topic |
@@ -28,6 +37,8 @@ This is not a toy CRUD. The design includes the patterns you'd expect in a real 
 ---
 
 ## Architecture
+
+For a deeper breakdown (Mermaid diagrams, Kafka and datastore ownership, gateway security), see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ```
                                 ┌──────────────────────┐
@@ -80,7 +91,7 @@ This is not a toy CRUD. The design includes the patterns you'd expect in a real 
 | `notifications-service` | Python/FastAPI | 8005 | Postgres + Kafka | Multi-topic consumer, email/push sim |
 | `search-service` | Python/FastAPI | 8006 | ES + Kafka | Full-text + autocomplete, indexes via events |
 | `stock-monitor` | Go | 8099 (metrics) | Kafka | Periodic low-stock, `stock-alert` producer |
-| **`prometheus`** | — | 9090 | — | Scrapes every `/metrics` endpoint |
+| **`prometheus`** | — | 9090 | — | Scrapes `/metrics` (or Spring Actuator); **api-gateway** job sends Bearer from `infra/prometheus/secrets/gateway-metrics.token` |
 | **`grafana`** | — | 3000 | — | Pre-provisioned dashboard + datasources |
 | **`jaeger`** | — | 16686 | — | OTLP/HTTP collector + UI |
 
@@ -100,7 +111,7 @@ This is not a toy CRUD. The design includes the patterns you'd expect in a real 
 ## Quickstart
 
 ```bash
-make up        # build + run the full stack (13 containers)
+make up        # build + run the full stack (~18 compose services; kafka-init exits after topic setup)
 make smoke     # end-to-end test walk-through
 make obs-open  # open Grafana, Prometheus, Jaeger in the browser
 ```
@@ -114,9 +125,12 @@ docker compose up --build -d
 
 ### CI status (current branch)
 
-- Latest CI passes after fixing Python import-order lint issues and missing `api-gateway` runtime deps (`prometheus-client`, `redis`, OpenTelemetry packages).
-- Trivy action uses `aquasecurity/trivy-action@v0.36.0` (working tag).
-- GitHub still shows Node.js 20 deprecation annotations for some actions; these are warnings, not build failures.
+- Python jobs: **Ruff enforced** + **pytest + coverage** per service (`api-gateway`, `payments-service`, `notifications-service`, `search-service`).
+- JVM: **Maven** (`users-service`), **Gradle Wrapper** (`./gradlew test`) for `orders-service`.
+- Go: **`go mod tidy`**, **golangci-lint** (step may be non-blocking per workflow), **`go build`**, and **`go test -race`** for `products-service` and `stock-monitor`.
+- **Trivy** filesystem + config scans use `aquasecurity/trivy-action@v0.36.0` with **`exit-code: "0"`** (advisory — does not fail the workflow on findings; tighten when you adopt a CVE baseline).
+- `docker compose config -q` sanity job validates the compose file.
+- GitHub may show Node.js 20 deprecation warnings on some Actions; they do not block the build by themselves.
 
 ### Ports & what each one shows
 
@@ -124,7 +138,7 @@ docker compose up --build -d
 |---|---|
 | http://localhost:8000/docs | **Gateway Swagger** — every public route, `Try it out`-able |
 | http://localhost:3000 | **Grafana** — open dashboard *MeliSim overview* (RPS, p95 latency, service availability, Kafka events/sec, outbox state) |
-| http://localhost:9090 | **Prometheus** — raw metrics, `Status → Targets` shows whether every service is being scraped |
+| http://localhost:9090 | **Prometheus** — raw metrics; `Status → Targets` should show **api-gateway** as **UP** (Bearer scrape configured in `infra/prometheus/prometheus.yml`) |
 | http://localhost:16686 | **Jaeger** — pick `api-gateway` in the service dropdown to see end-to-end traces of a request hopping through 3-4 services |
 | http://localhost:9200 | Elasticsearch HTTP (debug indexed products) |
 | http://localhost:8002/metrics | products-service Prometheus exposition format |
@@ -144,7 +158,7 @@ The fix: inside the same JPA transaction that saves the order row, stage the eve
 
 Files:
 - `orders-service/src/main/kotlin/com/melisim/orders/outbox/` — entity, repo, publisher, worker
-- `orders-service/src/main/resources/db/migration/V2__outbox.sql`
+- `orders-service/src/main/resources/db/migration/V2__outbox.sql` — `status` as `VARCHAR(20)` (Flyway); JPA maps `OutboxStatus` with `@Enumerated(STRING)` and explicit `columnDefinition = "varchar(20)"` so **Hibernate `ddl-auto: validate`** matches MySQL (avoids MySQL `ENUM` vs string mismatch).
 
 ### Resilience4j (orders-service → products-service)
 
@@ -169,6 +183,7 @@ Files:
 ### Observability trio
 
 - **Metrics**: every HTTP service exposes `/metrics` (Prometheus). Spring services go through Micrometer; Python services use `prometheus-client`; Go services use `prometheus/client_golang`. Request counters + latency histograms + custom `melisim_events_published_total` / `melisim_outbox_events{state}`.
+- **Gateway `/metrics`**: not public without credentials — scrapers must send `Authorization: Bearer <token>` matching `infra/prometheus/secrets/gateway-metrics.token` (see `docker-compose.yml` volumes on `api-gateway` and `prometheus`). User JWTs still work for `/metrics` if you ever need a quick manual scrape with a logged-in token.
 - **Traces**: OpenTelemetry SDK in Python services, Micrometer Tracing + OTel exporter in Spring. All point at `http://jaeger:4318/v1/traces`.
 - **Correlation IDs**: gateway mints/propagates `X-Request-ID`; each service adds it to MDC (Spring) or a request-scoped contextvar (Python), so logs across services share a request id.
 
@@ -186,7 +201,8 @@ Every service has both `/health/live` (process responsiveness) and `/health/read
    - `orders-service` calls `GET /products/{id}` through Resilience4j (CB + retry).
    - Validates stock.
    - Persists the order **and** stages `order-created` in `outbox_events` — same tx.
-   - The outbox worker picks it up and publishes to Kafka.
+   - After commit, `OrderSideEffects` calls `products-service` to decrement stock (HTTP outside the DB transaction).
+   - The outbox worker picks up the row and publishes to Kafka.
 4. **Notification** — `notifications-service` consumes `order-created` → renders `order_confirmed.html` → logs an email + writes a `notifications` row.
 5. **Pay** — `POST /payments` (with `Idempotency-Key: <uuid>`) → `payments-service` simulates a 2s processor → publishes `payment-confirmed` or `payment-failed`.
 6. **Status update** — `orders-service` consumes `payment-confirmed` → `PAID`. `notifications-service` consumes it too → receipt + push.
@@ -198,16 +214,18 @@ Every service has both `/health/live` (process responsiveness) and `/health/read
 
 ```
 melisim/
-├── docker-compose.yml         # 13 services: 8 app + 5 infra/obs
+├── docker-compose.yml         # 18 services (8 app + data/messaging/obs); kafka-init is one-shot
 ├── Makefile                   # make up / make smoke / make test / make obs-open
 ├── test.sh                    # end-to-end purchase walk-through
-├── .github/workflows/ci.yml   # lint + test + Trivy per language
+├── .github/workflows/ci.yml   # lint + test + Trivy (advisory) + compose config
 ├── README.md
+├── ARCHITECTURE.md            # detailed architecture reference
+├── STUDY_GUIDE.md             # study & interview guide
 ├── api-gateway/               # Python — JWT, rate limit, correlation, metrics
 ├── users-service/             # Java — BCrypt, JWT, Flyway
 ├── products-service/          # Go — Postgres/Redis/Kafka, /metrics
 ├── orders-service/            # Kotlin — Resilience4j + Outbox + Flyway
-├── payments-service/          # Python — Idempotency-Key, async SQLAlchemy
+├── payments-service/          # Python — Idempotency-Key, async SQLAlchemy (`db.py` session factory)
 ├── notifications-service/     # Python — multi-topic Kafka consumer
 ├── search-service/            # Python — Elasticsearch indexing from events
 ├── stock-monitor/             # Go — scheduled job, /metrics
@@ -215,6 +233,7 @@ melisim/
     ├── mysql/init.sql          # fallback schema (Flyway owns it in prod)
     ├── postgres/init.sql       # products, payments, idempotency_keys, notifications
     ├── prometheus/prometheus.yml
+    ├── prometheus/secrets/     # gateway-metrics.token (+ README) for Bearer scrape
     ├── grafana/                # provisioned datasources + dashboard
     ├── kafka/topics.sh
     └── elasticsearch/mappings.json
