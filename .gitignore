@@ -29,3 +29,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local/private docs (do not publish)
+ARCHITECTURE.md
+STUDY_GUIDE.md
