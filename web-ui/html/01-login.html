@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Login</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #EBEBEB; min-height: 100vh; display: flex; flex-direction: column; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel">
+    const inputSt = { width: '100%', padding: '12px 14px', border: '1px solid #E0E0E0', borderRadius: 6, fontSize: 14, fontFamily: T.sans, outline: 'none', transition: 'border 150ms' };
+    const labelSt = { fontSize: 13, fontWeight: 600, color: C.gray700, marginBottom: 6, display: 'block' };
+
+    function App() {
+      const params = new URLSearchParams(location.search);
+      const expired = params.get('expired') === '1';
+      const next = params.get('next') || '10-buyer-home.html';
+
+      const [mode, setMode] = React.useState('login');
+      const [showPassword, setShowPassword] = React.useState(false);
+      const [form, setForm] = React.useState({
+        name: '', email: '', password: '', confirmPassword: '', userType: 'BUYER',
+      });
+      const [submitting, setSubmitting] = React.useState(false);
+      const [toast, setToast] = React.useState(null);
+
+      // If already authenticated, route by role (never send buyers to admin).
+      React.useEffect(() => {
+        if (!MeliSim.isLoggedIn()) return;
+        const u = MeliSim.getUser();
+        if (u?.userType === 'ADMIN') {
+          location.href = '30-admin-overview.html';
+          return;
+        }
+        if (u?.userType === 'SELLER') {
+          location.href = '20-seller-dashboard.html';
+          return;
+        }
+        const dest = (next || '').includes('30-admin') ? '10-buyer-home.html' : (next || '10-buyer-home.html');
+        location.href = dest;
+      }, []);
+
+      const upd = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+      const submit = async (e) => {
+        e.preventDefault();
+        setSubmitting(true);
+        try {
+          if (mode === 'register') {
+            if (form.password !== form.confirmPassword) throw new Error('As senhas não coincidem');
+            await MeliSim.register({
+              name: form.name, email: form.email, password: form.password, userType: form.userType,
+            });
+            // After register, immediately login.
+            await MeliSim.login({ email: form.email, password: form.password });
+          } else {
+            await MeliSim.login({ email: form.email, password: form.password });
+          }
+          const user = MeliSim.getUser();
+          if (user?.userType === 'ADMIN') {
+            location.href = '30-admin-overview.html';
+            return;
+          }
+          if (user?.userType === 'SELLER') {
+            location.href = '20-seller-dashboard.html';
+            return;
+          }
+          const nextUrl = (next || '').includes('30-admin') ? '10-buyer-home.html' : (next || '10-buyer-home.html');
+          location.href = nextUrl;
+        } catch (err) {
+          setToast({ message: err.message || 'Falha ao autenticar', type: 'error' });
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      // Quick-login presets — for demo. Reads from any pre-seeded users via the API.
+      const quickFill = (preset) => {
+        const presets = {
+          buyer:  { email: 'bob@melisim.com',   password: 'demopass123', name: 'Bob Ferreira', userType: 'BUYER'  },
+          seller: { email: 'alice@melisim.com', password: 'demopass123', name: 'Alice Comércio', userType: 'SELLER' },
+          admin:  { email: 'admin@melisim.com', password: 'Admin00@@',   name: 'Administrador', userType: 'BUYER' },
+        };
+        setForm({ ...form, ...presets[preset] });
+      };
+
+      return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: C.yellow, padding: '14px 24px', display: 'flex', justifyContent: 'center' }}>
+            <Logo size={22} />
+          </div>
+
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div style={{ width: 420, animation: 'fadeUp 0.3s ease' }}>
+              <Card hover={false} style={{ padding: '32px 28px' }}>
+                <h1 style={{ fontSize: 24, fontWeight: 800, color: C.blue, textAlign: 'center', marginBottom: 4 }}>
+                  {mode === 'login' ? 'Entrar' : 'Criar conta'}
+                </h1>
+                <p style={{ fontSize: 13, color: C.gray500, textAlign: 'center', marginBottom: 18 }}>
+                  {mode === 'login' ? 'Acesse sua conta MeliSim' : 'Cadastre-se para comprar e vender'}
+                </p>
+
+                {expired && mode === 'login' && (
+                  <div style={{ background: C.warningBg, color: '#7a4f00', padding: '10px 14px', borderRadius: 4, fontSize: 13, marginBottom: 14 }}>
+                    Sua sessão expirou. Faça login novamente.
+                  </div>
+                )}
+
+                <form onSubmit={submit}>
+                  {mode === 'register' && (
+                    <div style={{ marginBottom: 14 }}>
+                      <label style={labelSt}>Nome completo</label>
+                      <input style={inputSt} value={form.name} onChange={upd('name')} placeholder="Seu nome" required />
+                    </div>
+                  )}
+
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={labelSt}>E-mail</label>
+                    <input style={inputSt} type="email" value={form.email} onChange={upd('email')} placeholder="voce@email.com" required />
+                  </div>
+
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={labelSt}>Senha</label>
+                    <div style={{ position: 'relative' }}>
+                      <input style={{ ...inputSt, paddingRight: 44 }} type={showPassword ? 'text' : 'password'}
+                        value={form.password} onChange={upd('password')} placeholder="••••••••" required minLength={8} />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: C.gray400 }}>
+                        {showPassword ? '🙈' : '👁'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {mode === 'register' && (
+                    <>
+                      <div style={{ marginBottom: 14 }}>
+                        <label style={labelSt}>Confirmar senha</label>
+                        <input style={inputSt} type="password" value={form.confirmPassword} onChange={upd('confirmPassword')} placeholder="••••••••" required />
+                      </div>
+                      <div style={{ marginBottom: 14 }}>
+                        <label style={labelSt}>Eu sou</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {['BUYER', 'SELLER'].map(t => (
+                            <button key={t} type="button" onClick={() => setForm({ ...form, userType: t })}
+                              style={{ flex: 1, padding: '12px 14px', border: `2px solid ${form.userType === t ? C.action : C.gray200}`, background: form.userType === t ? C.actionLt : C.white, borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 13, color: form.userType === t ? C.action : C.gray700, fontFamily: T.sans }}>
+                              {t === 'BUYER' ? '🛒 Comprador' : '📦 Vendedor'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <Btn variant="primary" size="lg" type="submit" loading={submitting} style={{ width: '100%', marginTop: 4, marginBottom: 14 }}>
+                    {mode === 'login' ? 'Entrar' : 'Criar conta'}
+                  </Btn>
+                </form>
+
+                <div style={{ textAlign: 'center', fontSize: 13, color: C.gray600 }}>
+                  {mode === 'login' ? (
+                    <>Não tem conta? <span onClick={() => setMode('register')} style={{ color: C.action, fontWeight: 600, cursor: 'pointer' }}>Cadastre-se</span></>
+                  ) : (
+                    <>Já tem conta? <span onClick={() => setMode('login')} style={{ color: C.action, fontWeight: 600, cursor: 'pointer' }}>Entrar</span></>
+                  )}
+                </div>
+
+                {mode === 'login' && (
+                  <div style={{ marginTop: 22, paddingTop: 18, borderTop: `1px solid ${C.gray100}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.gray500, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10, textAlign: 'center' }}>Demo — preencher e entrar</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" onClick={() => quickFill('buyer')}
+                          style={{ flex: 1, padding: '10px', border: `1px solid ${C.gray200}`, background: C.gray50, borderRadius: 6, cursor: 'pointer', fontSize: 12, fontFamily: T.sans, color: C.gray700 }}>
+                          🛒 Bob (comprador)
+                        </button>
+                        <button type="button" onClick={() => quickFill('seller')}
+                          style={{ flex: 1, padding: '10px', border: `1px solid ${C.gray200}`, background: C.gray50, borderRadius: 6, cursor: 'pointer', fontSize: 12, fontFamily: T.sans, color: C.gray700 }}>
+                          📦 Alice (vendedor)
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => quickFill('admin')}
+                        style={{ width: '100%', padding: '10px', border: `1px solid ${C.blue}`, background: C.gray900, color: C.yellow, borderRadius: 6, cursor: 'pointer', fontSize: 12, fontFamily: T.sans, fontWeight: 700 }}>
+                        ⚙ Admin (admin@melisim.com / Admin00@@)
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.gray400, textAlign: 'center', marginTop: 8 }}>
+                      Primeira vez? Use "Cadastre-se" — usuários são criados via API real.
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </div>
+          </div>
+
+          <footer style={{ textAlign: 'center', padding: '16px', fontSize: 12, color: C.gray400, borderTop: `1px solid ${C.gray100}` }}>
+            © 2026 MeliSim — Projeto educacional
+          </footer>
+
+          {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

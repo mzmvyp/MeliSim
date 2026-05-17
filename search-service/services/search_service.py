@@ -52,13 +52,19 @@ class SearchService:
         except Exception as e:
             log.warning("could not ensure index: %s", e)
 
-    async def index_product(self, product: dict, *, strict: bool = False) -> None:
+    async def index_product(
+        self,
+        product: dict,
+        *,
+        strict: bool = False,
+        refresh: bool | str = "wait_for",
+    ) -> None:
         pid = product.get("id")
         if pid is None:
             log.warning("product missing id, skipping index")
             return
         try:
-            await self.client.index(index=INDEX, id=str(pid), document=product, refresh="wait_for")
+            await self.client.index(index=INDEX, id=str(pid), document=product, refresh=refresh)
             log.info("indexed product id=%s", pid)
         except Exception as e:
             if strict:

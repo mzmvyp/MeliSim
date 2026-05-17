@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Busca</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #EBEBEB; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel" src="ui_kits/app/buyer-home.jsx"></script>
+  <script type="text/babel" src="ui_kits/app/buyer-search.jsx"></script>
+  <script type="text/babel">
+    function App() {
+      return (<div><Header /><BuyerSearch /></div>);
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

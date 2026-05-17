@@ -1,0 +1,199 @@
+/* ============================================================
+   MeliSim Design System — Colors & Typography
+   Inspired by Mercado Livre's brand palette.
+   ⚠️  Font: Nunito Sans (Google Fonts) substitutes Proxima Nova.
+       Drop real .woff2 files into fonts/ and update @font-face
+       below to use the licensed version.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+/* ── Raw palette ───────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --meli-yellow:       #FFE600;
+  --meli-yellow-dark:  #F0D900;
+  --meli-yellow-light: #FFF59D;
+  --meli-blue:         #2D3277;
+  --meli-blue-dark:    #1E2255;
+  --meli-blue-light:   #3D4591;
+  --meli-action:       #3483FA;
+  --meli-action-dark:  #2968C8;
+  --meli-action-light: #EBF4FF;
+
+  /* Status */
+  --meli-success:      #00A650;
+  --meli-success-bg:   #E8F7EF;
+  --meli-error:        #F23D4F;
+  --meli-error-bg:     #FEE8EA;
+  --meli-warning:      #FF9F00;
+  --meli-warning-bg:   #FFF3E0;
+  --meli-info:         #3483FA;
+  --meli-info-bg:      #EBF4FF;
+
+  /* Neutrals */
+  --meli-gray-900:     #1A1A1A;
+  --meli-gray-800:     #333333;
+  --meli-gray-700:     #4D4D4D;
+  --meli-gray-600:     #666666;
+  --meli-gray-500:     #808080;
+  --meli-gray-400:     #999999;
+  --meli-gray-300:     #CCCCCC;
+  --meli-gray-200:     #E0E0E0;
+  --meli-gray-100:     #EBEBEB;
+  --meli-gray-50:      #F5F5F5;
+  --meli-white:        #FFFFFF;
+
+  /* ── Semantic tokens ──────────────────────────────────────── */
+  --color-bg-page:       var(--meli-gray-100);
+  --color-bg-surface:    var(--meli-white);
+  --color-bg-elevated:   var(--meli-white);
+  --color-bg-brand:      var(--meli-yellow);
+  --color-bg-dark:       var(--meli-blue);
+
+  --color-text-primary:  var(--meli-gray-800);
+  --color-text-secondary:var(--meli-gray-600);
+  --color-text-disabled: var(--meli-gray-400);
+  --color-text-inverse:  var(--meli-white);
+  --color-text-brand:    var(--meli-blue);
+  --color-text-link:     var(--meli-action);
+
+  --color-border:        var(--meli-gray-200);
+  --color-border-focus:  var(--meli-action);
+  --color-divider:       var(--meli-gray-100);
+
+  --color-interactive:   var(--meli-action);
+  --color-interactive-hover: var(--meli-action-dark);
+  --color-cta:           var(--meli-yellow);
+  --color-cta-hover:     var(--meli-yellow-dark);
+
+  /* ── Typography ───────────────────────────────────────────── */
+  --font-sans:  'Nunito Sans', 'Proxima Nova', system-ui, sans-serif;
+  --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Size scale */
+  --text-xs:    12px;
+  --text-sm:    14px;
+  --text-base:  16px;
+  --text-lg:    18px;
+  --text-xl:    20px;
+  --text-2xl:   24px;
+  --text-3xl:   32px;
+  --text-4xl:   40px;
+  --text-5xl:   48px;
+
+  /* Weight */
+  --font-light:     300;
+  --font-regular:   400;
+  --font-semibold:  600;
+  --font-bold:      700;
+  --font-extrabold: 800;
+
+  /* Line height */
+  --leading-tight:  1.2;
+  --leading-snug:   1.35;
+  --leading-normal: 1.5;
+  --leading-loose:  1.7;
+
+  /* Letter spacing */
+  --tracking-tight:  -0.02em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.04em;
+  --tracking-wider:   0.08em;
+
+  /* ── Semantic type roles ──────────────────────────────────── */
+  --type-h1-size:   var(--text-5xl);
+  --type-h1-weight: var(--font-extrabold);
+  --type-h1-leading:var(--leading-tight);
+
+  --type-h2-size:   var(--text-3xl);
+  --type-h2-weight: var(--font-bold);
+  --type-h2-leading:var(--leading-tight);
+
+  --type-h3-size:   var(--text-2xl);
+  --type-h3-weight: var(--font-bold);
+  --type-h3-leading:var(--leading-snug);
+
+  --type-h4-size:   var(--text-xl);
+  --type-h4-weight: var(--font-semibold);
+  --type-h4-leading:var(--leading-snug);
+
+  --type-body-size:    var(--text-base);
+  --type-body-weight:  var(--font-regular);
+  --type-body-leading: var(--leading-normal);
+
+  --type-small-size:   var(--text-sm);
+  --type-small-weight: var(--font-regular);
+
+  --type-caption-size:  var(--text-xs);
+  --type-label-weight:  var(--font-semibold);
+
+  --type-code-size:    var(--text-sm);
+  --type-code-family:  var(--font-mono);
+
+  /* ── Spacing scale ────────────────────────────────────────── */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+  --space-24:  96px;
+
+  /* ── Radius ───────────────────────────────────────────────── */
+  --radius-sm:   2px;
+  --radius-base: 4px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-pill: 999px;
+
+  /* ── Shadows / Elevation ──────────────────────────────────── */
+  --shadow-1:  0 1px 4px rgba(0,0,0,0.10);
+  --shadow-2:  0 2px 8px rgba(0,0,0,0.12);
+  --shadow-3:  0 4px 16px rgba(0,0,0,0.14);
+  --shadow-4:  0 8px 32px rgba(0,0,0,0.18);
+
+  /* ── Transitions ──────────────────────────────────────────── */
+  --transition-fast:   150ms ease;
+  --transition-base:   200ms ease;
+  --transition-slow:   350ms ease;
+}
+
+/* ── Global resets ────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-leading);
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 { font-size: var(--type-h1-size); font-weight: var(--type-h1-weight); line-height: var(--type-h1-leading); letter-spacing: var(--tracking-tight); }
+h2 { font-size: var(--type-h2-size); font-weight: var(--type-h2-weight); line-height: var(--type-h2-leading); letter-spacing: var(--tracking-tight); }
+h3 { font-size: var(--type-h3-size); font-weight: var(--type-h3-weight); line-height: var(--type-h3-leading); }
+h4 { font-size: var(--type-h4-size); font-weight: var(--type-h4-weight); line-height: var(--type-h4-leading); }
+p  { font-size: var(--type-body-size); line-height: var(--type-body-leading); }
+
+code, pre {
+  font-family: var(--font-mono);
+  font-size: var(--type-code-size);
+  background: var(--meli-gray-100);
+  border-radius: var(--radius-base);
+}
+code { padding: 2px 6px; }
+pre  { padding: var(--space-4); overflow-x: auto; }
+
+a {
+  color: var(--color-text-link);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+a:hover { text-decoration: underline; }

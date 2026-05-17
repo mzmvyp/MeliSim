@@ -6,6 +6,7 @@ import com.melisim.users.dto.UserRequest;
 import com.melisim.users.dto.UserResponse;
 import com.melisim.users.exception.EmailAlreadyExistsException;
 import com.melisim.users.exception.InvalidCredentialsException;
+import com.melisim.users.exception.InvalidRegistrationException;
 import com.melisim.users.exception.UserNotFoundException;
 import com.melisim.users.model.User;
 import com.melisim.users.model.UserType;
@@ -70,6 +71,14 @@ class UserServiceTest {
         assertThatThrownBy(() -> service.register(validRequest))
                 .isInstanceOf(EmailAlreadyExistsException.class);
 
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void register_asAdmin_isRejected() {
+        validRequest.setUserType(UserType.ADMIN);
+        assertThatThrownBy(() -> service.register(validRequest))
+                .isInstanceOf(InvalidRegistrationException.class);
         verify(repository, never()).save(any());
     }
 

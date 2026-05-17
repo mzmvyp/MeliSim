@@ -1,8 +1,10 @@
 apiVersion: 1
 
 datasources:
+  # uid must match dashboards (e.g. melisim-overview.json → uid "prometheus").
   - name: Prometheus
     type: prometheus
+    uid: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
@@ -10,6 +12,7 @@ datasources:
 
   - name: Jaeger
     type: jaeger
+    uid: jaeger
     access: proxy
     url: http://jaeger:16686
     editable: false

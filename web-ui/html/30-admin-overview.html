@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Admin Overview</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #F4F6F9; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .admin-services-grid {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      align-items: stretch;
+    }
+    @media (max-width: 1180px) {
+      .admin-services-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+      .admin-services-grid { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel">
+    const SERVICE_DEFS = [
+      { name: 'api-gateway',          lang: 'Python', port: 8000, healthPath: '/health' },
+      { name: 'users-service',        lang: 'Java',   port: 8001, healthPath: '/actuator/health' },
+      { name: 'products-service',     lang: 'Go',     port: 8002, healthPath: '/health' },
+      { name: 'orders-service',       lang: 'Kotlin', port: 8003, healthPath: '/actuator/health' },
+      { name: 'payments-service',     lang: 'Python', port: 8004, healthPath: '/health' },
+      { name: 'notifications-service',lang: 'Python', port: 8005, healthPath: '/health' },
+      { name: 'search-service',       lang: 'Python', port: 8006, healthPath: '/health' },
+      { name: 'stock-monitor',        lang: 'Go',     port: 8099, healthPath: '/health' },
+    ];
+
+    function useServiceMetricsPolling(intervalMs = 8000, enabled = true) {
+      const [latest, setLatest] = React.useState(null);
+      const [rpsHistory, setRpsHistory] = React.useState(() => ({}));
+      const tick = React.useCallback(async () => {
+        try {
+          const data = await MeliSim.getAdminServiceMetrics();
+          setLatest(data);
+          setRpsHistory((prev) => {
+            const next = { ...prev };
+            for (const row of data.services || []) {
+              const n = row.name;
+              const rps = row.requests_per_second;
+              const v = rps != null && !Number.isNaN(Number(rps)) ? Number(rps) : 0;
+              next[n] = [...(next[n] || []), v].slice(-40);
+            }
+            return next;
+          });
+        } catch (_) {
+          setLatest(null);
+        }
+      }, []);
+      React.useEffect(() => {
+        if (!enabled) return undefined;
+        tick();
+        const t = setInterval(tick, intervalMs);
+        return () => clearInterval(t);
+      }, [enabled, tick, intervalMs]);
+      return { latest, rpsHistory, refresh: tick };
+    }
+
+    function useDashboardKpis(enabled, intervalMs = 12000) {
+      const [kpis, setKpis] = React.useState(null);
+      const load = React.useCallback(async () => {
+        try {
+          const d = await MeliSim.getAdminDashboardKpis();
+          setKpis(d);
+        } catch (_) {
+          setKpis(null);
+        }
+      }, []);
+      React.useEffect(() => {
+        if (!enabled) return undefined;
+        load();
+        const t = setInterval(load, intervalMs);
+        return () => clearInterval(t);
+      }, [enabled, load, intervalMs]);
+      return kpis;
+    }
+
+    function langBadgeColors(lang) {
+      const m = {
+        Python: { fg: '#fff', bg: '#3776ab' },
+        Java: { fg: '#fff', bg: '#ea8600' },
+        Go: { fg: '#fff', bg: '#00ADD8' },
+        Kotlin: { fg: '#fff', bg: '#7f52ff' },
+      };
+      return m[lang] || { fg: C.gray800, bg: C.gray200 };
+    }
+
+    function useHealthPolling(intervalMs = 5000, enabled = true) {
+      const [statuses, setStatuses] = React.useState(() => SERVICE_DEFS.map(s => ({ ...s, up: null, elapsedMs: null })));
+      const [healthBanner, setHealthBanner] = React.useState(null);
+      const [healthHistory, setHealthHistory] = React.useState([]);
+      const tick = React.useCallback(async () => {
+        try {
+          const data = await MeliSim.getAllServicesHealth();
+          setStatuses((data.services || []).map(s => ({ ...s, lang: s.lang || '?', port: s.port })));
+          setHealthBanner({
+            kind: 'ok',
+            text: 'Health agregado pelo API Gateway (ping na rede Docker — sem CORS).',
+          });
+        } catch (e) {
+          const st = e.status;
+          const resetUnknown = () => setStatuses(SERVICE_DEFS.map((s) => ({ ...s, up: null, elapsedMs: null, lang: s.lang, port: s.port })));
+          if (st === 403) {
+            setHealthBanner({ kind: 'err', text: 'Sem permissão para health admin (token não é ADMIN).' });
+            resetUnknown();
+            return;
+          }
+          if (st === 401 || e.message === 'unauthorized') return;
+          const base = (typeof MeliSim !== 'undefined' && MeliSim.gatewayUrl) ? MeliSim.gatewayUrl : '';
+          const detail = (e && (e.message || String(e))) || 'erro desconhecido';
+          setHealthBanner({
+            kind: 'warn',
+            text: `Não foi possível ler o health agregado no gateway${base ? ` (${base})` : ''}. ${detail} Faça login de novo como ADMIN ou confira se o Docker expõe a porta 8000 neste host.`,
+          });
+          resetUnknown();
+        }
+      }, []);
+      React.useEffect(() => {
+        if (!enabled) return;
+        if (!statuses.some(s => s.up === true || s.up === false)) return;
+        const upN = statuses.filter(s => s.up === true).length;
+        const ratio = statuses.length ? upN / statuses.length : 0;
+        setHealthHistory((prev) => {
+          const entry = {
+            ts: Date.now(),
+            ratio,
+            rows: statuses.map((s) => ({ n: s.name, up: s.up, ms: s.elapsedMs })),
+          };
+          return [...prev, entry].slice(-48);
+        });
+      }, [statuses, enabled]);
+      React.useEffect(() => {
+        if (!enabled) return;
+        tick();
+        const t = setInterval(tick, intervalMs);
+        return () => clearInterval(t);
+      }, [tick, intervalMs, enabled]);
+      return { statuses, refresh: tick, healthBanner, healthHistory };
+    }
+
+    /** Ring chart + sparkline + latency bars — dados reais do gateway / fallback. */
+    function ServiceHealthVisualization({ statuses, healthHistory }) {
+      const n = Math.max(statuses.length, 1);
+      const sliceDeg = 360 / n;
+      const upCount = statuses.filter((s) => s.up === true).length;
+      const stops = [];
+      let deg = 0;
+      statuses.forEach((s) => {
+        const col = s.up === null ? '#BBBBBB' : s.up ? '#00A650' : '#F23D4F';
+        stops.push(`${col} ${deg}deg ${deg + sliceDeg}deg`);
+        deg += sliceDeg;
+      });
+      const ringBg = stops.length ? `conic-gradient(${stops.join(', ')})` : '#E0E0E0';
+
+      const maxMs = Math.max(50, ...statuses.map((s) => (s.elapsedMs != null ? s.elapsedMs : 0)), 1);
+
+      const hist = healthHistory.length >= 2 ? healthHistory : [];
+      const sparkW = 420;
+      const sparkH = 96;
+      let sparkLineD = '';
+      let sparkAreaD = '';
+      if (hist.length >= 2) {
+        const pts = hist.map((h, i) => {
+          const x = (i / (hist.length - 1)) * sparkW;
+          const y = sparkH - h.ratio * (sparkH - 10) - 5;
+          return `${x},${y}`;
+        });
+        sparkLineD = 'M ' + pts.join(' L ');
+        sparkAreaD = `M 0,${sparkH} L ${pts.join(' L ')} L ${sparkW},${sparkH} Z`;
+      }
+
+      return (
+        <Card hover={false} style={{ padding: 22, marginBottom: 22, border: '1px solid #E8EAEF', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.blue, marginBottom: 6 }}>Visão gráfica — saúde dos serviços</div>
+          <div style={{ fontSize: 12, color: C.gray500, marginBottom: 18 }}>
+            Atualizado a cada 5s · cores: verde UP · vermelho DOWN · cinza checando
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 28, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{ position: 'relative', width: 200, height: 200 }}>
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    background: ringBg,
+                    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '58%',
+                    height: '58%',
+                    borderRadius: '50%',
+                    background: C.white,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                  }}
+                >
+                  <div style={{ fontSize: 30, fontWeight: 800, color: C.blue, lineHeight: 1 }}>{upCount}<span style={{ color: C.gray400, fontWeight: 600 }}>/{statuses.length}</span></div>
+                  <div style={{ fontSize: 11, color: C.gray500, marginTop: 4 }}>serviços UP</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: C.gray500, maxWidth: 220, textAlign: 'center' }}>
+                Cada fatia = um microserviço (sentido horário, mesma ordem da lista abaixo)
+              </div>
+            </div>
+
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.gray700, marginBottom: 8 }}>Histórico — fração UP (últimos pontos)</div>
+              {hist.length >= 2 ? (
+                <svg width={sparkW} height={sparkH} style={{ display: 'block' }}>
+                  <defs>
+                    <linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3483FA" stopOpacity="0.35" />
+                      <stop offset="100%" stopColor="#3483FA" stopOpacity="0.02" />
+                    </linearGradient>
+                  </defs>
+                  <rect x="0" y="0" width={sparkW} height={sparkH} fill="#F5F5F5" rx="6" />
+                  <path d={sparkAreaD} fill="url(#sparkFill)" />
+                  <path
+                    d={sparkLineD}
+                    fill="none"
+                    stroke="#3483FA"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <text x={8} y={16} fill={C.gray500} fontSize="10" fontFamily="system-ui">
+                    100%
+                  </text>
+                  <text x={8} y={sparkH - 6} fill={C.gray500} fontSize="10" fontFamily="system-ui">
+                    0%
+                  </text>
+                </svg>
+              ) : (
+                <div style={{ height: sparkH, background: C.gray50, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.gray400, fontSize: 13 }}>
+                  Coletando histórico… (aguarde 2 leituras)
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 22 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.gray700, marginBottom: 10 }}>Latência do health check (ms) — altura relativa ao maior valor do quadro</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', minHeight: 140, paddingTop: 4 }}>
+              {statuses.map((s) => {
+                const pct = s.up ? Math.min(100, ((s.elapsedMs != null ? s.elapsedMs : 0) / maxMs) * 100) : 0;
+                const barBg = s.up === null ? C.gray200 : s.up ? C.action : C.danger;
+                return (
+                  <div key={s.name} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: C.gray600, textAlign: 'center', lineHeight: 1.2, wordBreak: 'break-word' }}>
+                      {s.name.replace('-service', '').replace('api-gateway', 'gateway')}
+                    </div>
+                    <div style={{ flex: 1, width: '100%', maxWidth: 52, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', minHeight: 90 }}>
+                      <div
+                        style={{
+                          width: '100%',
+                          height: `${Math.max(s.up === false ? 12 : 8, pct)}%`,
+                          minHeight: s.up === false ? 12 : 8,
+                          background: s.up === null ? C.gray200 : barBg,
+                          borderRadius: 4,
+                          opacity: s.up === null ? 0.75 : 1,
+                          transition: 'height 0.35s ease',
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: C.gray700 }}>{s.elapsedMs != null ? `${s.elapsedMs}` : '—'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    function SreServiceCard({ s, healthHistory, metricsRow, rpsSpark }) {
+      const lb = langBadgeColors(s.lang);
+      const p95Prom = metricsRow?.latency_p95_ms != null ? Number(metricsRow.latency_p95_ms) : null;
+      const p95Health = s.elapsedMs != null ? Number(s.elapsedMs) : null;
+      const p95Val = p95Prom != null ? p95Prom : p95Health;
+      const down = s.up === false;
+      const warnLatency = (p95Val != null && p95Val > 200) || (s.elapsedMs != null && s.elapsedMs > 2000);
+      const dot = down ? C.danger : warnLatency ? C.warning : s.up ? C.success : C.gray400;
+      const rpsVal = metricsRow?.requests_per_second != null ? Number(metricsRow.requests_per_second) : null;
+      const rpsDisplay = rpsVal != null && !Number.isNaN(rpsVal) ? Math.round(rpsVal) : '—';
+      const p95Danger = p95Val != null && p95Val > 200;
+
+      const latencySeries = React.useMemo(() => {
+        let last = 0;
+        return healthHistory.map((h) => {
+          const row = h.rows?.find((r) => r.n === s.name);
+          if (row?.ms != null) last = row.ms;
+          return last;
+        });
+      }, [healthHistory, s.name]);
+
+      const sparkRps = rpsSpark && rpsSpark.length >= 2 ? rpsSpark : null;
+      let sparkData = sparkRps;
+      if (!sparkData) {
+        sparkData = latencySeries.length >= 2
+          ? latencySeries
+          : latencySeries.length === 1
+            ? [latencySeries[0], latencySeries[0]]
+            : [0, 0];
+      }
+      const sparkColor = down ? C.danger : p95Danger ? C.danger : warnLatency ? C.warning : C.action;
+
+      return (
+        <Card hover={false} style={{
+          width: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
+          padding: 16,
+          border: down ? `1px solid ${C.danger}` : warnLatency ? `2px solid ${C.warning}` : '1px solid #E8EAEF',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          minHeight: 192,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          borderRadius: 10,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0, animation: down ? 'pulse 1s infinite' : 'none' }} />
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#1a1a1a', fontFamily: T.mono, wordBreak: 'break-word' }}>{s.name}</span>
+            </div>
+            <span style={{ fontSize: 10, fontWeight: 800, color: lb.fg, background: lb.bg, padding: '3px 9px', borderRadius: 4, flexShrink: 0 }}>{s.lang}</span>
+          </div>
+          <div style={{ fontSize: 12, color: C.gray500, marginTop: 8 }}>:{s.port}</div>
+          <div style={{ marginTop: 'auto', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 'clamp(22px, 2.5vw, 36px)', fontWeight: 800, color: '#1a1a1a', lineHeight: 1 }}>{rpsDisplay}</div>
+              <div style={{ fontSize: 11, color: C.gray500, fontWeight: 600, marginTop: 2 }}>RPS</div>
+              <div style={{ fontSize: 11, color: p95Danger ? C.danger : C.gray500, fontWeight: 600, marginTop: 8 }}>
+                p95 {p95Val != null ? `${Math.round(p95Val)}` : '—'}ms
+                {p95Prom == null && p95Health != null && <span style={{ color: C.gray400, fontWeight: 400 }}> (health)</span>}
+              </div>
+            </div>
+            <div style={{ flexShrink: 0, marginLeft: 'auto' }}>
+              <Sparkline data={sparkData} color={sparkColor} width={148} height={42} />
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    function dependencyNodeStyle(statuses, metricsByName, fullName) {
+      const s = statuses.find((x) => x.name === fullName);
+      const row = metricsByName?.[fullName];
+      const p95Prom = row?.latency_p95_ms != null ? Number(row.latency_p95_ms) : null;
+      const p95Health = s?.elapsedMs != null ? Number(s.elapsedMs) : null;
+      const p95Val = p95Prom != null ? p95Prom : p95Health;
+      const unknown = !s || s.up === null;
+      const down = s?.up === false;
+      const warn = !unknown && ((p95Val != null && p95Val > 200) || (s?.elapsedMs != null && s.elapsedMs > 1500));
+      const border = unknown ? '#cbd5e1' : down ? C.danger : warn ? C.warning : C.success;
+      const dot = unknown ? C.gray400 : down ? C.danger : warn ? C.warning : C.success;
+      const strokeW = unknown ? 1.5 : warn || down ? 2.2 : 1.8;
+      return { border, dot, strokeW, down, warn };
+    }
+
+    function DependencyMapSvg({ statuses, metricsByName }) {
+      const uid = `d${String(React.useId()).replace(/[^a-zA-Z0-9]/g, '')}`;
+      const strokeOk = '#b8c0ce';
+      const pay = statuses.find((x) => x.name === 'payments-service');
+      const mPay = metricsByName?.['payments-service'];
+      const p95Pay = mPay?.latency_p95_ms != null ? Number(mPay.latency_p95_ms) : null;
+      const payCritical = pay && (
+        pay.up === false
+        || (p95Pay != null && p95Pay > 200)
+        || (pay.elapsedMs != null && pay.elapsedMs > 1500)
+      );
+
+      const R = {
+        gw: { x: 241, y: 8, w: 100, h: 34 },
+        users: { x: 48, y: 78, w: 92, h: 34 },
+        products: { x: 178, y: 78, w: 92, h: 34 },
+        orders: { x: 308, y: 78, w: 92, h: 34 },
+        payments: { x: 438, y: 78, w: 100, h: 34 },
+        notifications: { x: 118, y: 168, w: 118, h: 34 },
+        search: { x: 318, y: 168, w: 92, h: 34 },
+        stock: { x: 498, y: 168, w: 118, h: 34 },
+      };
+
+      const Edge = ({ from, to, critical, thick, mode }) => {
+        const A = R[from];
+        const B = R[to];
+        let x1; let y1; let x2; let y2;
+        if (mode === 'h') {
+          x1 = A.x + A.w;
+          y1 = A.y + A.h / 2;
+          x2 = B.x;
+          y2 = B.y + B.h / 2;
+        } else {
+          x1 = A.x + A.w / 2;
+          y1 = A.y + A.h;
+          x2 = B.x + B.w / 2;
+          y2 = B.y;
+        }
+        const col = critical ? C.danger : strokeOk;
+        const dash = critical ? '7 5' : '0';
+        const sw = critical ? (thick ? 3 : 2) : 1.4;
+        const midId = critical ? `mR-${uid}` : `mG-${uid}`;
+        return (
+          <line
+            key={`${from}-${to}-${mode || 'v'}-${critical ? 'c' : 'n'}`}
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+            stroke={col}
+            strokeWidth={sw}
+            strokeDasharray={dash}
+            markerEnd={`url(#${midId})`}
+          />
+        );
+      };
+
+      const Node = ({ k, label, full }) => {
+        const b = R[k];
+        const st = dependencyNodeStyle(statuses, metricsByName, full);
+        return (
+          <g key={k}>
+            <rect
+              x={b.x}
+              y={b.y}
+              width={b.w}
+              height={b.h}
+              rx={8}
+              fill="#fff"
+              stroke={st.border}
+              strokeWidth={st.strokeW}
+            />
+            <circle cx={b.x + 14} cy={b.y + b.h / 2} r={4.5} fill={st.dot} />
+            <text x={b.x + 26} y={b.y + b.h / 2 + 4} fill="#1a1a1a" fontSize="12" fontWeight="700" fontFamily="system-ui,sans-serif">
+              {label}
+            </text>
+          </g>
+        );
+      };
+
+      return (
+        <Card hover={false} style={{ padding: 18, marginBottom: 22, border: '1px solid #E8EAEF', flex: '1 1 420px', minWidth: 280 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.gray800, marginBottom: 4 }}>Mapa de dependências</div>
+          <div style={{ fontSize: 11, color: C.gray500, marginBottom: 10 }}>
+            Bordas e setas reagem ao health e ao p95 (Prometheus) de cada serviço — rotas para <strong>payments</strong> em vermelho tracejado quando há degradação.
+          </div>
+          <svg viewBox="0 0 720 230" width="100%" style={{ display: 'block', maxHeight: 300 }}>
+            <defs>
+              <marker id={`mG-${uid}`} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <polygon points="0 0, 8 4, 0 8" fill={strokeOk} />
+              </marker>
+              <marker id={`mR-${uid}`} markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+                <polygon points="0 0, 9 4.5, 0 9" fill={C.danger} />
+              </marker>
+            </defs>
+            <g strokeLinecap="round" strokeLinejoin="round">
+              <Edge from="gw" to="users" />
+              <Edge from="gw" to="products" />
+              <Edge from="gw" to="orders" />
+              {payCritical ? (
+                <>
+                  <Edge from="gw" to="payments" critical thick />
+                  <Edge from="orders" to="payments" critical mode="h" />
+                </>
+              ) : (
+                <Edge from="gw" to="payments" />
+              )}
+              <Edge from="orders" to="notifications" />
+              <Edge from="products" to="search" />
+              <Edge from="products" to="stock" />
+            </g>
+            <g>
+            <Node k="gw" label="api-gateway" full="api-gateway" />
+            <Node k="users" label="users" full="users-service" />
+            <Node k="products" label="products" full="products-service" />
+            <Node k="orders" label="orders" full="orders-service" />
+            <Node k="payments" label="payments" full="payments-service" />
+            <Node k="notifications" label="notifications" full="notifications-service" />
+            <Node k="search" label="search" full="search-service" />
+            <Node k="stock" label="stock-monitor" full="stock-monitor" />
+            </g>
+          </svg>
+        </Card>
+      );
+    }
+
+    function IncidentPanel() {
+      return (
+        <Card hover={false} style={{ padding: 18, marginBottom: 22, border: '1px solid #E8EAEF', flex: '1 1 320px', minWidth: 260, minHeight: 280 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.gray800, marginBottom: 14 }}>Incidentes / Deploys (24h)</div>
+          <div style={{ fontSize: 12, color: C.gray500, lineHeight: 1.75 }}>
+            Nenhum evento neste ambiente. Quando houver integração com audit log ou webhooks de deploy, alertas e releases aparecem aqui com timestamp.
+          </div>
+        </Card>
+      );
+    }
+
+    function AdminOverviewDashboard({ statuses, refresh, healthBanner, healthHistory, metricsPoll }) {
+      const kpis = useDashboardKpis(true, 12000);
+      const mByName = React.useMemo(() => {
+        const o = {};
+        for (const row of metricsPoll?.latest?.services || []) o[row.name] = row;
+        return o;
+      }, [metricsPoll?.latest]);
+      const rpm = kpis?.requests_per_minute != null ? Math.round(kpis.requests_per_minute).toLocaleString('pt-BR') : '—';
+      const errPct = kpis?.error_rate != null ? `${(kpis.error_rate * 100).toFixed(2)}%` : '—';
+      const kfk = kpis?.kafka_events_per_second != null ? kpis.kafka_events_per_second.toFixed(2) : '—';
+      const obox = kpis?.outbox_pending != null ? String(kpis.outbox_pending) : '—';
+      const kfkSub = kpis?.kafka_topic_count != null ? `${kpis.kafka_topic_count} tópicos (pipeline)` : 'métrica Prometheus';
+      const oboxSub = kpis?.outbox_source_hint || 'orders outbox';
+
+      return (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+            <div>
+              <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1a2340', letterSpacing: '-0.02em' }}>System Overview — MeliSim</h1>
+              <p style={{ fontSize: 13, color: C.gray500, marginTop: 6 }}>Painel operacional · dados reais (gateway + Prometheus + outbox)</p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Btn variant="ghost" size="sm" onClick={refresh}>↻ Refresh</Btn>
+              <a href="http://localhost:3000/d/melisim-overview" target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}><Btn variant="secondary" size="sm">📊 Grafana</Btn></a>
+              <a href="http://localhost:16686" target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}><Btn variant="secondary" size="sm">🔍 Jaeger</Btn></a>
+            </div>
+          </div>
+
+          {healthBanner && (
+            <div style={{
+              background: healthBanner.kind === 'ok' ? C.successBg : healthBanner.kind === 'warn' ? C.warningBg : C.dangerBg,
+              padding: 12, borderRadius: 6, fontSize: 12,
+              color: healthBanner.kind === 'ok' ? '#0d4d2a' : healthBanner.kind === 'warn' ? '#7a4f00' : '#8b1538',
+              marginBottom: 16,
+            }}>
+              {healthBanner.kind === 'ok' ? '✓ ' : healthBanner.kind === 'warn' ? '⚠ ' : '✕ '}{healthBanner.text}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 22 }}>
+            <MetricCard label="Requests / min" value={rpm} sub="Total agregado (Prometheus)" color={C.gray900} />
+            <MetricCard label="Error rate" value={errPct} sub="HTTP 5xx / total (5 min)" color={kpis?.error_rate != null && kpis.error_rate > 0.05 ? C.danger : C.gray900} />
+            <MetricCard label="Kafka events / s" value={kfk} sub={kfkSub} color={C.gray900} />
+            <MetricCard label="Outbox pending" value={obox} sub={oboxSub} color={kpis?.outbox_pending > 0 ? C.warning : C.gray900} />
+          </div>
+          {kpis && !kpis.prometheus_ok && (
+            <div style={{ fontSize: 11, color: C.gray500, marginTop: -12, marginBottom: 16 }}>
+              Prometheus não retornou séries — KPIs de taxa podem aparecer como — até o stack estar no ar.
+            </div>
+          )}
+
+          <ServiceHealthVisualization statuses={statuses} healthHistory={healthHistory} />
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'stretch', marginBottom: 8 }}>
+            <DependencyMapSvg statuses={statuses} metricsByName={mByName} />
+            <IncidentPanel />
+          </div>
+
+          <div style={{ fontSize: 12, fontWeight: 800, color: C.gray700, marginBottom: 10, letterSpacing: '0.06em', textAlign: 'center' }}>SERVICES</div>
+          <div className="admin-services-grid" style={{ margin: '0 0 24px' }}>
+            {statuses.map((s) => (
+              <SreServiceCard
+                key={s.name}
+                s={s}
+                healthHistory={healthHistory}
+                metricsRow={mByName[s.name]}
+                rpsSpark={metricsPoll?.rpsHistory[s.name]}
+              />
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    function AdminServicesGrid({ statuses, refresh, healthBanner, healthHistory, metricsPoll }) {
+      const mByName = React.useMemo(() => {
+        const o = {};
+        for (const row of metricsPoll?.latest?.services || []) o[row.name] = row;
+        return o;
+      }, [metricsPoll?.latest]);
+
+      return (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+            <div>
+              <h1 style={{ fontSize: 24, fontWeight: 800, color: '#1a2340', letterSpacing: '-0.02em' }}>Services</h1>
+              <p style={{ fontSize: 13, color: C.gray500, marginTop: 6 }}>
+                Cartões ao vivo: <strong>RPS</strong> e <strong>p95</strong> vindos do Prometheus (mesmos queries do dashboard Grafana) · status pelo health agregado no gateway.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Btn variant="ghost" size="sm" onClick={() => { refresh(); metricsPoll.refresh(); }}>↻ Refresh</Btn>
+              <a href="http://localhost:3000/d/melisim-overview" target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}><Btn variant="secondary" size="sm">📊 Grafana</Btn></a>
+            </div>
+          </div>
+          {healthBanner && (
+            <div style={{
+              background: healthBanner.kind === 'ok' ? C.successBg : healthBanner.kind === 'warn' ? C.warningBg : C.dangerBg,
+              padding: 12, borderRadius: 6, fontSize: 12,
+              color: healthBanner.kind === 'ok' ? '#0d4d2a' : healthBanner.kind === 'warn' ? '#7a4f00' : '#8b1538',
+              marginBottom: 16,
+            }}>
+              {healthBanner.kind === 'ok' ? '✓ ' : healthBanner.kind === 'warn' ? '⚠ ' : '✕ '}{healthBanner.text}
+            </div>
+          )}
+          {metricsPoll?.latest && metricsPoll.latest.prometheus_ok === false && (
+            <div style={{ fontSize: 12, color: C.gray600, marginBottom: 14, padding: 10, background: C.warningBg, borderRadius: 6 }}>
+              Prometheus ainda não expôs taxas (sem tráfego ou scrape). RPS pode aparecer como <strong>0</strong> ou <strong>—</strong>; p95 usa health quando o histograma não existe.
+            </div>
+          )}
+          <div className="admin-services-grid">
+            {statuses.map((s) => (
+              <SreServiceCard
+                key={s.name}
+                s={s}
+                healthHistory={healthHistory}
+                metricsRow={mByName[s.name]}
+                rpsSpark={metricsPoll?.rpsHistory[s.name]}
+              />
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    function AdminOutbox() {
+      const [data, setData] = React.useState(null);
+      const [error, setError] = React.useState(null);
+      const load = React.useCallback(async () => {
+        try {
+          setError(null);
+          const d = await MeliSim.getOutboxSummary();
+          setData(d);
+        } catch (e) {
+          setError(e.message || String(e));
+        }
+      }, []);
+      React.useEffect(() => {
+        load();
+        const t = setInterval(load, 10000);
+        return () => clearInterval(t);
+      }, [load]);
+
+      const p = Number(data?.pending ?? 0);
+      const s24 = Number(data?.sentLast24Hours ?? 0);
+      const st = Number(data?.sentTotal ?? 0);
+      const f = Number(data?.failed ?? 0);
+      const maxV = Math.max(p, s24, f, 1);
+
+      return (
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: C.blue, marginBottom: 14 }}>Outbox Monitor</h2>
+          <div style={{ background: C.successBg, padding: 12, borderRadius: 6, fontSize: 12, color: '#0d4d2a', marginBottom: 14 }}>
+            ✓ Contagens ao vivo do <strong>orders-service</strong> (tabela <code style={{ fontSize: 11 }}>outbox_events</code> no MySQL). Atualiza a cada 10s.
+            {' '}SQL ad-hoc: <code style={{ fontSize: 11 }}>SELECT status, COUNT(*) FROM outbox_events GROUP BY status</code>
+          </div>
+          {error && (
+            <div style={{ background: C.dangerBg, padding: 12, borderRadius: 6, fontSize: 12, color: '#8b1538', marginBottom: 14 }}>
+              {error}
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 18 }}>
+            <MetricCard label="PENDING" value={data != null ? p : '—'} sub={data != null ? 'aguardando envio ao Kafka' : 'carregando…'} color={C.warning} />
+            <MetricCard label="SENT (24h)" value={data != null ? s24 : '—'} sub={data != null ? `total SENT no banco: ${st}` : ''} color={C.success} />
+            <MetricCard label="FAILED" value={data != null ? f : '—'} sub={data != null ? 'requer análise / replay' : ''} color={C.danger} />
+          </div>
+          {data && (
+            <Card hover={false} style={{ padding: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.blue, marginBottom: 14 }}>Gráfico — filas do outbox</div>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', height: 150, marginBottom: 8 }}>
+                {[
+                  { label: 'PENDING', v: p, c: C.warning },
+                  { label: 'SENT 24h', v: s24, c: C.success },
+                  { label: 'FAILED', v: f, c: C.danger },
+                ].map((row) => (
+                  <div key={row.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: '100%', maxWidth: 72, height: 120, background: C.gray100, borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', overflow: 'hidden', border: `1px solid ${C.gray200}` }}>
+                      <div style={{ height: `${(row.v / maxV) * 100}%`, minHeight: row.v > 0 ? 10 : 0, background: row.c, transition: 'height 0.45s ease' }} />
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.gray600 }}>{row.label}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: row.c }}>{row.v}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: C.gray500 }}>
+                Última leitura: {data.checkedAt ? new Date(data.checkedAt).toLocaleString('pt-BR') : '—'}
+              </div>
+            </Card>
+          )}
+        </div>
+      );
+    }
+
+    function AdminDLQ() {
+      const [pack, setPack] = React.useState(null);
+      const [error, setError] = React.useState(null);
+      React.useEffect(() => {
+        let cancelled = false;
+        (async () => {
+          try {
+            const d = await MeliSim.getDlqTopics();
+            if (!cancelled) {
+              setPack(d);
+              setError(null);
+            }
+          } catch (e) {
+            if (!cancelled) setError(e.message || String(e));
+          }
+        })();
+        return () => { cancelled = true; };
+      }, []);
+      const topics = pack?.topics || [];
+      return (
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: C.blue, marginBottom: 14 }}>Dead Letter Queues</h2>
+          <div style={{ background: C.actionLt, padding: 12, borderRadius: 6, fontSize: 12, color: C.action, marginBottom: 16 }}>
+            Catálogo servido pelo <strong>api-gateway</strong> (sincronizado com <code>infra/kafka/topics.sh</code>). O stack não expõe REST do Kafka — use o CLI abaixo para inspecionar mensagens.
+            {pack?.cliHint && (
+              <div style={{ marginTop: 8, fontFamily: T.mono, fontSize: 10, wordBreak: 'break-all' }}>{pack.cliHint}</div>
+            )}
+          </div>
+          {error && (
+            <div style={{ background: C.dangerBg, padding: 12, borderRadius: 6, fontSize: 12, color: '#8b1538', marginBottom: 14 }}>{error}</div>
+          )}
+          {topics.map((t) => (
+            <Card key={t.name} style={{ padding: 14, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontFamily: T.mono, fontSize: 13, color: C.gray800 }}>{t.name}</div>
+                <div style={{ fontSize: 11, color: C.gray500 }}>{t.partitions} partição(ões) • retenção {t.retentionDays}d</div>
+              </div>
+              <Badge color={C.gray700} bg={C.gray100}>DLQ</Badge>
+            </Card>
+          ))}
+          {!pack && !error && (
+            <div style={{ fontSize: 13, color: C.gray500 }}>Carregando tópicos…</div>
+          )}
+        </div>
+      );
+    }
+
+    function AdminKafka() {
+      return (
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: C.blue, marginBottom: 14 }}>Kafka Topics</h2>
+          <div style={{ fontSize: 12, color: C.gray500, marginBottom: 14 }}>
+            Definidos em <code>infra/kafka/topics.sh</code>
+          </div>
+          {['order-created', 'payment-confirmed', 'payment-failed', 'stock-updates', 'stock-alert', 'product-created'].map(t => (
+            <Card key={t} style={{ padding: 14, marginBottom: 8, display: 'grid', gridTemplateColumns: '1fr 100px 100px 120px', gap: 14, alignItems: 'center' }}>
+              <div style={{ fontFamily: T.mono, fontSize: 13, color: C.gray800 }}>{t}</div>
+              <div style={{ fontSize: 12, color: C.gray500 }}>3 part.</div>
+              <div style={{ fontSize: 12, color: C.gray500 }}>repl. 1</div>
+              <Badge color={C.action} bg={C.actionLt}>ativo</Badge>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    function App() {
+      const [screen, setScreen] = React.useState('admin-overview');
+      const user = MeliSim.getUser();
+      const isAdmin = !!(MeliSim.isLoggedIn() && user && user.userType === 'ADMIN');
+      const { statuses, refresh, healthBanner, healthHistory } = useHealthPolling(5000, isAdmin);
+      const metricsPoll = useServiceMetricsPolling(8000, isAdmin);
+
+      React.useEffect(() => {
+        if (!MeliSim.isLoggedIn()) {
+          window.location.replace('01-login.html?next=' + encodeURIComponent('30-admin-overview.html'));
+          return;
+        }
+        if (!user || user.userType !== 'ADMIN') {
+          window.location.replace('10-buyer-home.html');
+        }
+      }, []);
+
+      if (!isAdmin) {
+        return (
+          <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#EBEBEB', fontFamily: T.sans, color: C.gray800 }}>
+            Verificando sessão…
+          </div>
+        );
+      }
+
+      return (
+        <div style={{ display: 'flex', minHeight: '100vh', background: '#F4F6F9' }}>
+          <Sidebar persona="admin" active={screen} onNav={setScreen} variant="sre" />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+            <div style={{ flex: 1, padding: '24px 28px' }}>
+              {screen === 'admin-overview' && (
+                <AdminOverviewDashboard
+                  statuses={statuses}
+                  refresh={refresh}
+                  healthBanner={healthBanner}
+                  healthHistory={healthHistory}
+                  metricsPoll={metricsPoll}
+                />
+              )}
+              {screen === 'admin-services' && (
+                <AdminServicesGrid
+                  statuses={statuses}
+                  refresh={refresh}
+                  healthBanner={healthBanner}
+                  healthHistory={healthHistory}
+                  metricsPoll={metricsPoll}
+                />
+              )}
+              {screen === 'admin-outbox' && <AdminOutbox />}
+              {screen === 'admin-dlq' && <AdminDLQ />}
+              {screen === 'admin-kafka' && <AdminKafka />}
+            </div>
+            <div style={{
+              padding: '12px 28px',
+              background: '#EBF4FF',
+              fontSize: 12,
+              color: C.action,
+              borderTop: '1px solid rgba(52,131,250,0.2)',
+            }}>
+              Métricas RPS / JVM / erros: <strong>Grafana</strong> <code style={{ fontSize: 11 }}>localhost:3000</code>
+              {' · '}
+              Traces: <strong>Jaeger</strong> <code style={{ fontSize: 11 }}>localhost:16686</code>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

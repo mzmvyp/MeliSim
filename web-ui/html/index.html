@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Galeria UI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Nunito Sans', system-ui, sans-serif; background: #F5F5F5; color: #333; }
+    .header { background: #FFE600; padding: 32px 24px 24px; text-align: center; }
+    .header h1 { font-size: 32px; font-weight: 800; color: #2D3277; letter-spacing: -0.02em; }
+    .header p { font-size: 15px; color: #2D3277; opacity: 0.7; margin-top: 6px; }
+    .header .cta { margin-top: 14px; display: inline-block; background: #2D3277; color: #FFE600; padding: 10px 22px; border-radius: 6px; font-size: 14px; font-weight: 700; text-decoration: none; }
+    .personas { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
+    .persona-title { font-size: 18px; font-weight: 800; color: #2D3277; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .persona-title .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-bottom: 40px; }
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.10); overflow: hidden; cursor: pointer; transition: transform 150ms, box-shadow 150ms; text-decoration: none; color: inherit; display: block; }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.14); }
+    .card-preview { height: 140px; display: flex; align-items: center; justify-content: center; font-size: 48px; }
+    .card-body { padding: 14px 16px; border-top: 1px solid #EBEBEB; }
+    .card-body h3 { font-size: 14px; font-weight: 700; color: #333; }
+    .card-body p { font-size: 12px; color: #999; margin-top: 3px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; margin-left: 6px; background: #00A650; color: #fff; }
+    .info { max-width: 800px; margin: 0 auto 32px; padding: 16px 20px; background: #EBF4FF; border-radius: 8px; font-size: 13px; color: #2D3277; line-height: 1.6; }
+    .info code { background: #fff; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🛒 MeliSim</h1>
+    <p>Marketplace simulado • UI conectada à API real</p>
+    <a class="cta" href="01-login.html">Entrar →</a>
+  </div>
+
+  <div class="personas">
+    <div class="info">
+      ✅ <strong>UI integrada</strong>: no Docker, fetch para <code>/api/v1/*</code> na mesma origem (:3001 → nginx → gateway). Fora do Docker use <code>window.MELISIM_API</code>.<br>
+      🔐 <strong>Auth real</strong>: cadastro/login via users-service, JWT em localStorage.<br>
+      💳 <strong>Checkout real</strong>: cria order no orders-service + payment com Idempotency-Key.<br>
+      📊 <strong>Admin</strong>: pings live aos 8 services + atalhos para Grafana e Jaeger.
+    </div>
+
+    <div class="persona-title"><div class="dot" style="background:#2D3277"></div> Comece aqui</div>
+    <div class="grid">
+      <a class="card" href="01-login.html">
+        <div class="card-preview" style="background:linear-gradient(135deg,#2D3277 0%,#FFE600 100%)">🔐</div>
+        <div class="card-body"><h3>Login & Cadastro<span class="badge">REAL</span></h3><p>Cria usuário no users-service e armazena JWT</p></div>
+      </a>
+    </div>
+
+    <div class="persona-title"><div class="dot" style="background:#3483FA"></div> Comprador</div>
+    <div class="grid">
+      <a class="card" href="10-buyer-home.html"><div class="card-preview" style="background:linear-gradient(135deg,#FFE600 0%,#2D3277 100%)">🏠</div><div class="card-body"><h3>Home<span class="badge">REAL</span></h3><p>Lista produtos do products-service</p></div></a>
+      <a class="card" href="11-buyer-search.html"><div class="card-preview" style="background:#F5F5F5">🔍</div><div class="card-body"><h3>Busca & Detalhe<span class="badge">REAL</span></h3><p>search-service (ES) + detalhe via products</p></div></a>
+      <a class="card" href="12-buyer-cart.html"><div class="card-preview" style="background:#FFF3E0">🛒</div><div class="card-body"><h3>Carrinho<span class="badge">REAL</span></h3><p>localStorage (sem backend de cart ainda)</p></div></a>
+      <a class="card" href="13-buyer-checkout.html"><div class="card-preview" style="background:#EBF4FF">💳</div><div class="card-body"><h3>Checkout<span class="badge">REAL</span></h3><p>POST /orders + POST /payments com Idempotency-Key</p></div></a>
+      <a class="card" href="14-buyer-orders.html"><div class="card-preview" style="background:#E8F7EF">📦</div><div class="card-body"><h3>Meus Pedidos<span class="badge">REAL</span></h3><p>GET /orders/user/{id}</p></div></a>
+      <a class="card" href="15-buyer-notifications.html"><div class="card-preview" style="background:#EBF4FF">🔔</div><div class="card-body"><h3>Notificações<span class="badge">REAL</span></h3><p>GET /notifications/user/{id}</p></div></a>
+      <a class="card" href="16-buyer-profile.html"><div class="card-preview" style="background:#F5F5F5">👤</div><div class="card-body"><h3>Perfil<span class="badge">REAL</span></h3><p>GET/PUT /users/{id}, BCrypt</p></div></a>
+    </div>
+
+    <div class="persona-title"><div class="dot" style="background:#00A650"></div> Vendedor</div>
+    <div class="grid">
+      <a class="card" href="20-seller-dashboard.html"><div class="card-preview" style="background:linear-gradient(135deg,#2D3277 0%,#3483FA 100%)">📊</div><div class="card-body"><h3>Dashboard<span class="badge">REAL</span></h3><p>KPIs derivados de /products + /orders</p></div></a>
+    </div>
+
+    <div class="persona-title"><div class="dot" style="background:#F23D4F"></div> Admin / SRE</div>
+    <div class="grid">
+      <a class="card" href="30-admin-overview.html"><div class="card-preview" style="background:#1A1A1A;color:#00A650">⊞</div><div class="card-body"><h3>System Overview<span class="badge">REAL</span></h3><p>Health pings live nos 8 services</p></div></a>
+      <a class="card" href="http://localhost:3000" target="_blank"><div class="card-preview" style="background:#1A1A1A;color:#FFE600">📈</div><div class="card-body"><h3>Grafana</h3><p>Dashboard MeliSim overview (porta 3000)</p></div></a>
+      <a class="card" href="http://localhost:16686" target="_blank"><div class="card-preview" style="background:#1A1A1A;color:#3483FA">🔍</div><div class="card-body"><h3>Jaeger</h3><p>Distributed tracing (porta 16686)</p></div></a>
+      <a class="card" href="http://localhost:8000/docs" target="_blank"><div class="card-preview" style="background:#1A1A1A;color:#fff">📜</div><div class="card-body"><h3>API Swagger</h3><p>Gateway OpenAPI (porta 8000)</p></div></a>
+    </div>
+
+    <div class="persona-title"><div class="dot" style="background:#FFE600;border:1px solid #E5E5E5"></div> Design System</div>
+    <div class="grid">
+      <a class="card" href="preview/colors-brand.html"><div class="card-preview" style="background:#FFE600">🎨</div><div class="card-body"><h3>Colors</h3><p>Brand palette</p></div></a>
+      <a class="card" href="preview/type-scale.html"><div class="card-preview" style="background:#F5F5F5">Aa</div><div class="card-body"><h3>Typography</h3><p>Scale, specimens</p></div></a>
+      <a class="card" href="preview/components-buttons.html"><div class="card-preview" style="background:#F5F5F5">🔘</div><div class="card-body"><h3>Components</h3><p>Buttons, inputs, cards</p></div></a>
+      <a class="card" href="preview/spacing-tokens.html"><div class="card-preview" style="background:#F5F5F5">📏</div><div class="card-body"><h3>Spacing</h3><p>Scale, radius, shadows</p></div></a>
+    </div>
+  </div>
+
+  <footer style="text-align:center;padding:24px;font-size:12px;color:#999;border-top:1px solid #E5E5E5">
+    © 2026 MeliSim — Projeto educacional
+  </footer>
+</body>
+</html>

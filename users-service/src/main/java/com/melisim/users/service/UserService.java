@@ -6,8 +6,10 @@ import com.melisim.users.dto.UserRequest;
 import com.melisim.users.dto.UserResponse;
 import com.melisim.users.exception.EmailAlreadyExistsException;
 import com.melisim.users.exception.InvalidCredentialsException;
+import com.melisim.users.exception.InvalidRegistrationException;
 import com.melisim.users.exception.UserNotFoundException;
 import com.melisim.users.model.User;
+import com.melisim.users.model.UserType;
 import com.melisim.users.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,9 @@ public class UserService {
 
     @Transactional
     public UserResponse register(UserRequest req) {
+        if (req.getUserType() == UserType.ADMIN) {
+            throw new InvalidRegistrationException("Cannot register as ADMIN — use a seeded admin account");
+        }
         if (repository.existsByEmail(req.getEmail())) {
             throw new EmailAlreadyExistsException("Email already registered: " + req.getEmail());
         }

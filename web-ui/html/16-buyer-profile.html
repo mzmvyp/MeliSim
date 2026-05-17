@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Perfil</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #EBEBEB; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel">
+    const inputSt = { width: '100%', padding: '11px 12px', border: `1px solid ${C.gray200}`, borderRadius: 6, fontSize: 14, fontFamily: T.sans, outline: 'none' };
+    const labelSt = { fontSize: 12, fontWeight: 700, color: C.gray700, marginBottom: 6, display: 'block' };
+
+    function Profile() {
+      MeliSim.requireAuth();
+      const user0 = MeliSim.getUser();
+      const { data: user, loading, error, reload } = useApi(
+        () => MeliSim.getUserById(user0.id), [user0?.id]);
+
+      const [tab, setTab] = React.useState('dados');
+      const [form, setForm] = React.useState(null);
+      const [saving, setSaving] = React.useState(false);
+      const [toast, setToast] = React.useState(null);
+
+      React.useEffect(() => {
+        if (user && !form) setForm({ name: user.name || '', email: user.email || '', userType: user.userType || 'BUYER', password: '' });
+      }, [user]);
+
+      const save = async () => {
+        setSaving(true);
+        try {
+          const patch = { name: form.name, email: form.email, userType: form.userType };
+          if (form.password) patch.password = form.password;
+          await MeliSim.updateUser(user.id, patch);
+          localStorage.setItem('melisim.user', JSON.stringify({ ...user0, name: form.name, email: form.email, userType: form.userType }));
+          setToast({ message: 'Perfil atualizado com sucesso', type: 'success' });
+          reload();
+        } catch (err) {
+          setToast({ message: err.message || 'Erro ao salvar', type: 'error' });
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      if (loading || !form) return <Loading label="Carregando perfil…" />;
+      if (error) return <ErrorState error={error} onRetry={reload} />;
+
+      return (
+        <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+            <div style={{ width: 72, height: 72, borderRadius: '50%', background: C.blue, color: C.yellow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 30 }}>{(user.name || '?').charAt(0).toUpperCase()}</div>
+            <div>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>{user.name}</h1>
+              <div style={{ fontSize: 13, color: C.gray500 }}>{user.email} • <Badge color={C.action} bg={C.actionLt}>{user.userType}</Badge></div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${C.gray200}`, marginBottom: 18 }}>
+            {[['dados', 'Dados pessoais'], ['address', 'Endereços'], ['security', 'Segurança']].map(([k, l]) => (
+              <div key={k} onClick={() => setTab(k)}
+                style={{ padding: '10px 18px', fontSize: 14, fontWeight: 700, color: tab === k ? C.action : C.gray500, borderBottom: tab === k ? `2px solid ${C.action}` : '2px solid transparent', cursor: 'pointer', marginBottom: -1 }}>
+                {l}
+              </div>
+            ))}
+          </div>
+
+          {tab === 'dados' && (
+            <Card hover={false} style={{ padding: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div><label style={labelSt}>Nome</label><input style={inputSt} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+                <div><label style={labelSt}>E-mail</label><input style={inputSt} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+                <div><label style={labelSt}>Tipo de conta</label>
+                  <select style={inputSt} value={form.userType} onChange={e => setForm({ ...form, userType: e.target.value })}>
+                    <option value="BUYER">Comprador</option>
+                    <option value="SELLER">Vendedor</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginTop: 18, display: 'flex', gap: 8 }}>
+                <Btn variant="primary" onClick={save} loading={saving}>Salvar alterações</Btn>
+                <Btn variant="ghost" onClick={() => MeliSim.logout()}>Sair da conta</Btn>
+              </div>
+            </Card>
+          )}
+
+          {tab === 'address' && (
+            <Card hover={false} style={{ padding: 24 }}>
+              <div style={{ fontSize: 13, color: C.gray500, marginBottom: 12 }}>Endereços de entrega cadastrados</div>
+              <Card style={{ padding: 14, border: `1px solid ${C.gray200}`, boxShadow: 'none' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.gray800 }}>Av. Paulista, 1578 — Apto 101</div>
+                <div style={{ fontSize: 13, color: C.gray500, marginTop: 4 }}>Bela Vista, São Paulo/SP — CEP 01310-100</div>
+                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                  <Badge color={C.success} bg={C.successBg}>Padrão</Badge>
+                  <Badge color={C.action} bg={C.actionLt}>Casa</Badge>
+                </div>
+              </Card>
+              <Btn variant="secondary" size="sm" style={{ marginTop: 12 }}>+ Adicionar endereço</Btn>
+            </Card>
+          )}
+
+          {tab === 'security' && (
+            <Card hover={false} style={{ padding: 24 }}>
+              <div style={{ marginBottom: 18 }}>
+                <label style={labelSt}>Nova senha</label>
+                <input style={inputSt} type="password" placeholder="Deixe em branco para não alterar"
+                  value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
+                <div style={{ fontSize: 11, color: C.gray500, marginTop: 6 }}>Mínimo 8 caracteres. Re-hasheada via BCrypt no users-service.</div>
+              </div>
+              <div style={{ marginBottom: 14, padding: 14, background: C.gray50, borderRadius: 6 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.gray800 }}>Autenticação em 2 fatores</div>
+                <div style={{ fontSize: 12, color: C.gray500, marginTop: 4 }}>Status: desativado</div>
+                <Btn variant="secondary" size="sm" style={{ marginTop: 8 }}>Ativar 2FA (em breve)</Btn>
+              </div>
+              <Btn variant="primary" onClick={save} loading={saving}>Salvar alterações</Btn>
+            </Card>
+          )}
+          {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+        </div>
+      );
+    }
+
+    function App() { return (<div><Header /><Profile /></div>); }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -71,3 +71,6 @@ melisim:
   jwt:
     secret: ${JWT_SECRET:melisim-dev-secret-must-be-at-least-32-chars-long}
     expiration-minutes: 60
+  admin:
+    email: ${MELISIM_ADMIN_EMAIL:admin@melisim.com}
+    password: ${MELISIM_ADMIN_PASSWORD:Admin00@@}

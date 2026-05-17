@@ -29,12 +29,22 @@ services:
     container_name: melisim-postgres
     restart: unless-stopped
     ports: ["5432:5432"]
+    # Logical decoding required by Debezium (MeliSimLake). wal_level=replica is Postgres default.
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=16
+      - -c
+      - max_wal_senders=16
     environment:
       POSTGRES_USER: melisim
       POSTGRES_PASSWORD: melisim123
       POSTGRES_DB: melisim
     volumes:
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./infra/postgres/debezium_prereq.sql:/docker-entrypoint-initdb.d/z-debezium_prereq.sql:ro
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U melisim -d melisim"]
@@ -47,7 +57,7 @@ services:
     image: redis:7-alpine
     container_name: melisim-redis
     restart: unless-stopped
-    ports: ["6379:6379"]
+    ports: ["6380:6379"]
     volumes:
       - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
@@ -72,7 +82,7 @@ services:
     container_name: melisim-kafka
     restart: unless-stopped
     depends_on: [zookeeper]
-    ports: ["9092:9092", "29092:29092"]
+    ports: ["19092:9092", "39092:29092"]
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -119,7 +129,9 @@ services:
     build: ./api-gateway
     container_name: melisim-api-gateway
     restart: unless-stopped
-    ports: ["8000:8000"]
+    ports: ["18000:8000"]
+    volumes:
+      - ./infra/prometheus/secrets/gateway-metrics.token:/run/secrets/gateway-metrics.token:ro
     environment:
       USERS_SERVICE_URL: http://users-service:8001
       PRODUCTS_SERVICE_URL: http://products-service:8002
@@ -132,6 +144,8 @@ services:
       REDIS_URL: redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: api-gateway
+      METRICS_SCRAPE_TOKEN_FILE: /run/secrets/gateway-metrics.token
+      PROMETHEUS_URL: http://prometheus:9090
     depends_on:
       redis:
         condition: service_healthy
@@ -160,6 +174,7 @@ services:
       SERVER_PORT: "8001"
       MANAGEMENT_OTLP_TRACING_ENDPOINT: http://jaeger:4318/v1/traces
       OTEL_SERVICE_NAME: users-service
+      MELISIM_ADMIN_PASSWORD: "Admin00@@"
     depends_on:
       mysql:
         condition: service_healthy
@@ -251,6 +266,7 @@ services:
     environment:
       ELASTICSEARCH_URL: http://elasticsearch:9200
       KAFKA_BROKERS: kafka:9092
+      PRODUCTS_SERVICE_URL: http://products-service:8002
       PORT: "8006"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       OTEL_SERVICE_NAME: search-service
@@ -259,6 +275,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      products-service:
+        condition: service_started
     networks: [melisim]
 
   stock-monitor:
@@ -277,14 +295,29 @@ services:
       - kafka
     networks: [melisim]
 
+  # --------- Frontend (HTML + JSX served by nginx) ---------
+  # Nginx faz proxy /api/* → api-gateway:8000 — browser usa só a origem :3001
+  # (sem CORS UI↔API; celular só precisa abrir http://IP:3001). Opcional:
+  # window.MELISIM_API antes de api.js para servir HTML fora do Docker.
+  web-ui:
+    build: ./web-ui
+    container_name: melisim-web-ui
+    restart: unless-stopped
+    ports: ["3001:80"]
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks: [melisim]
+
   # --------- Observability stack ---------
   prometheus:
     image: prom/prometheus:v2.49.1
     container_name: melisim-prometheus
     restart: unless-stopped
-    ports: ["9090:9090"]
+    ports: ["19090:9090"]
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/secrets/gateway-metrics.token:/etc/prometheus/secrets/gateway-metrics.token:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -296,7 +329,7 @@ services:
     image: grafana/grafana:10.3.1
     container_name: melisim-grafana
     restart: unless-stopped
-    ports: ["3000:3000"]
+    ports: ["13000:3000"]
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin

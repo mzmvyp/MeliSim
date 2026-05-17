@@ -1,0 +1,26 @@
+---
+# Overrides locais — bot de trafego automatizado para alimentar o pipeline
+# do MeliSimLake (CDC + eventos Kafka). NAO commitar com credenciais reais.
+
+services:
+  traffic-bot:
+    build: ./bots
+    image: melisim/traffic-bot:local
+    container_name: melisim-traffic-bot
+    depends_on:
+      api-gateway:
+        condition: service_started
+      orders-service:
+        condition: service_started
+      payments-service:
+        condition: service_started
+      products-service:
+        condition: service_healthy
+    environment:
+      BOT_API_BASE: http://api-gateway:8000
+      BOT_USERS: "4"
+      BOT_INTERVAL_SECONDS: "6"
+      BOT_PRODUCT_MAX_ID: "50"
+      BOT_PASSWORD: Botpwd123
+    networks: [melisim]
+    restart: unless-stopped

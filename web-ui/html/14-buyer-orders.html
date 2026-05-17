@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Meus pedidos</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #EBEBEB; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel">
+    function MyOrders() {
+      MeliSim.requireAuth();
+      const user = MeliSim.getUser();
+      const [filter, setFilter] = React.useState('ALL');
+      const { data, loading, error, reload } = useApi(
+        () => MeliSim.listOrdersByUser(user.id), [user?.id]);
+
+      const [productCache, setProductCache] = React.useState({});
+      React.useEffect(() => {
+        if (!data) return;
+        const need = [...new Set(data.map(o => o.productId).filter(id => !productCache[id]))];
+        if (need.length === 0) return;
+        Promise.all(need.map(id => MeliSim.getProduct(id).catch(() => null)))
+          .then(arr => {
+            const next = { ...productCache };
+            arr.forEach(p => { if (p) next[p.id] = p; });
+            setProductCache(next);
+          });
+      }, [data]);
+
+      const filtered = React.useMemo(() => {
+        if (!data) return [];
+        if (filter === 'ALL') return data;
+        return data.filter(o => o.status === filter);
+      }, [data, filter]);
+
+      const filters = [
+        { key: 'ALL', label: 'Todos' },
+        { key: 'CREATED', label: 'Criados' },
+        { key: 'PAID', label: 'Pagos' },
+        { key: 'SHIPPED', label: 'Enviados' },
+        { key: 'DELIVERED', label: 'Entregues' },
+        { key: 'CANCELLED', label: 'Cancelados' },
+      ];
+
+      return (
+        <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>Meus pedidos</h1>
+            <Btn variant="ghost" size="sm" onClick={reload}>↻ Atualizar</Btn>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
+            {filters.map(f => (
+              <button key={f.key} onClick={() => setFilter(f.key)}
+                style={{ padding: '7px 14px', border: `1px solid ${filter === f.key ? C.action : C.gray200}`, background: filter === f.key ? C.actionLt : C.white, color: filter === f.key ? C.action : C.gray700, borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: T.sans }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {loading && <Loading label="Buscando seus pedidos…" />}
+          {error && <ErrorState error={error} onRetry={reload} />}
+          {!loading && !error && filtered.length === 0 && (
+            <EmptyState icon="📦" title="Nenhum pedido"
+              description={filter === 'ALL' ? 'Você ainda não fez nenhum pedido. Que tal começar?' : `Nenhum pedido com status ${filter}.`}
+              cta={<a href="10-buyer-home.html" style={{ textDecoration: 'none' }}><Btn>Comprar agora</Btn></a>} />
+          )}
+          {filtered.map(o => {
+            const p = productCache[o.productId];
+            return (
+              <Card key={o.id} style={{ padding: 16, marginBottom: 12, display: 'grid', gridTemplateColumns: '64px 1fr auto auto', gap: 14, alignItems: 'center' }}>
+                <div style={{ width: 64, height: 64, background: C.gray50, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
+                  {productIcon(p || { title: '', category: '' })}
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.gray800 }}>{p?.title || `Produto #${o.productId}`}</div>
+                  <div style={{ fontSize: 12, color: C.gray500, marginTop: 4 }}>
+                    Pedido <strong>#{o.id}</strong> • {o.quantity} {o.quantity === 1 ? 'item' : 'itens'} • {o.createdAt ? new Date(o.createdAt).toLocaleDateString('pt-BR') : ''}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.gray900 }}>R$ {Number(o.totalAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                  <div style={{ marginTop: 6 }}><OrderBadge status={o.status} /></div>
+                </div>
+                <Btn variant="secondary" size="sm" onClick={() => alert(`Pedido #${o.id}\nStatus: ${o.status}\nTotal: R$ ${o.totalAmount}`)}>Detalhes</Btn>
+              </Card>
+            );
+          })}
+        </div>
+      );
+    }
+
+    function App() { return (<div><Header /><MyOrders /></div>); }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

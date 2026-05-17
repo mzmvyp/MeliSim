@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Início</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #EBEBEB; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel" src="ui_kits/app/buyer-home.jsx"></script>
+  <script type="text/babel">
+    function Footer() {
+      const cols = {
+        'Sobre MeliSim': ['Como funciona', 'Quem somos', 'Termos de uso', 'Privacidade'],
+        'Comprar': ['Ofertas do dia', 'Categorias', 'Tendências', 'Frete grátis'],
+        'Vender': ['Comece a vender', 'Central do vendedor', 'Taxas', 'Dicas'],
+        'Suporte': ['Ajuda', 'Contato', 'Devoluções', 'Status do pedido'],
+      };
+      return (
+        <footer style={{ background: C.white, borderTop: `1px solid ${C.gray200}`, padding: '40px 24px 20px' }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24 }}>
+            {Object.entries(cols).map(([title, links]) => (
+              <div key={title}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: C.gray800, marginBottom: 12 }}>{title}</div>
+                {links.map(l => <div key={l} style={{ fontSize: 13, color: C.gray500, padding: '4px 0', cursor: 'pointer' }}>{l}</div>)}
+              </div>
+            ))}
+          </div>
+          <div style={{ maxWidth: 1200, margin: '24px auto 0', borderTop: `1px solid ${C.gray100}`, paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: C.gray400 }}>© 2026 MeliSim — Projeto educacional</span>
+            <span style={{ fontSize: 12, color: C.gray400 }}>🇧🇷 Brasil • Português</span>
+          </div>
+        </footer>
+      );
+    }
+
+    function App() {
+      return (
+        <div>
+          <Header />
+          <BuyerHome />
+          <Footer />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

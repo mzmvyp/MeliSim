@@ -7,11 +7,20 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(120) NOT NULL,
     email VARCHAR(160) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    user_type ENUM('BUYER', 'SELLER') NOT NULL DEFAULT 'BUYER',
+    user_type ENUM('BUYER', 'SELLER', 'ADMIN') NOT NULL DEFAULT 'BUYER',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_users_email (email)
 ) ENGINE=InnoDB;
+
+-- Pre-seeded operator account (password: Admin00@@). Not exposed via public registration.
+INSERT INTO users (name, email, password_hash, user_type)
+VALUES (
+    'Administrador',
+    'admin@melisim.com',
+    '$2b$10$4o.hD2stzjHS3cPGWW2aM.p/qViRI7PqPyAr3tlWLBwD7AxLYU/jO',
+    'ADMIN'
+);
 
 CREATE TABLE IF NOT EXISTS orders (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

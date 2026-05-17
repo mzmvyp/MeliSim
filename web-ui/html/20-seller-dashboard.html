@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Painel do vendedor</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #EBEBEB; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel">
+    function SellerDashboard() {
+      MeliSim.requireAuth();
+      const user = MeliSim.getUser();
+      const isSeller = user?.userType === 'SELLER';
+
+      const { data: products, loading: lp, error: ep, reload: rp } = useApi(
+        () => MeliSim.listProducts({ size: 100 }), []);
+      const { data: myOrders, loading: lo, error: eo } = useApi(
+        () => MeliSim.listOrdersByUser(user.id), [user?.id]);
+
+      const myProducts = React.useMemo(() => {
+        if (!products?.items || !user?.id) return [];
+        return products.items.filter(p => p.seller_id === user.id);
+      }, [products, user]);
+
+      const lowStock = myProducts.filter(p => p.stock <= 10);
+      const totalRevenue = (myOrders || [])
+        .filter(o => o.status === 'PAID' || o.status === 'SHIPPED' || o.status === 'DELIVERED')
+        .reduce((s, o) => s + Number(o.totalAmount || 0), 0);
+      const ordersThisMonth = (myOrders || []).length;
+      const pendingOrders = (myOrders || []).filter(o => o.status === 'CREATED' || o.status === 'PAYMENT_PENDING').length;
+
+      const last30 = React.useMemo(() => {
+        const days = Array.from({ length: 30 }, () => 0);
+        (myOrders || []).forEach(o => {
+          if (!o.createdAt) return;
+          const d = new Date(o.createdAt);
+          const idx = 29 - Math.floor((Date.now() - d.getTime()) / 86400000);
+          if (idx >= 0 && idx < 30) days[idx] += Number(o.totalAmount || 0);
+        });
+        return days;
+      }, [myOrders]);
+
+      return (
+        <div style={{ display: 'flex' }}>
+          <Sidebar persona="seller" active="seller-dashboard" />
+          <div style={{ flex: 1, padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>Painel do vendedor</h1>
+              <div style={{ fontSize: 12, color: C.gray500 }}>
+                Olá, <strong>{user.name}</strong> {isSeller ? '⭐' : '(perfil de comprador — só leitura)'}
+              </div>
+            </div>
+
+            {(ep || eo) && <ErrorState error={ep || eo} onRetry={rp} />}
+            {(lp || lo) && <Loading label="Carregando dados…" />}
+
+            {!lp && !lo && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
+                  <MetricCard label="Receita total" value={`R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} sub="pedidos pagos+" trend={12} color={C.success} />
+                  <MetricCard label="Pedidos no mês" value={ordersThisMonth} sub="orders-service" trend={5} />
+                  <MetricCard label="Aguardando ação" value={pendingOrders} sub="CREATED/PAYMENT_PENDING" color={C.warning} />
+                  <MetricCard label="Estoque baixo" value={lowStock.length} sub="≤ 10 unidades" color={C.danger} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, marginBottom: 24 }}>
+                  <Card hover={false} style={{ padding: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: C.gray800 }}>Vendas — últimos 30 dias</div>
+                      <Badge color={C.success} bg={C.successBg}>R$ {last30.reduce((a, b) => a + b, 0).toLocaleString('pt-BR')}</Badge>
+                    </div>
+                    <Sparkline data={last30.map(v => v || 0.01)} color={C.action} width={620} height={120} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.gray400, marginTop: 8 }}>
+                      <span>{new Date(Date.now() - 29 * 86400000).toLocaleDateString('pt-BR')}</span>
+                      <span>hoje</span>
+                    </div>
+                  </Card>
+
+                  <Card hover={false} style={{ padding: 20 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: C.gray800, marginBottom: 14 }}>⚠ Alertas de estoque</div>
+                    {lowStock.length === 0 ? (
+                      <div style={{ fontSize: 13, color: C.gray500, padding: '20px 0', textAlign: 'center' }}>Tudo em ordem 🎉</div>
+                    ) : lowStock.slice(0, 5).map(p => (
+                      <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${C.gray100}` }}>
+                        <div style={{ fontSize: 13, color: C.gray800, flex: 1, paddingRight: 8 }}>{p.title.slice(0, 28)}{p.title.length > 28 ? '…' : ''}</div>
+                        <Badge color={C.danger} bg={C.dangerBg}>{p.stock}</Badge>
+                      </div>
+                    ))}
+                  </Card>
+                </div>
+
+                <Card hover={false} style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
+                  <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.gray100}`, display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: C.gray800 }}>Meus produtos ({myProducts.length})</div>
+                    <Btn size="sm" variant="primary">+ Novo produto</Btn>
+                  </div>
+                  {myProducts.length === 0 ? (
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: C.gray500, fontSize: 13 }}>
+                      Nenhum produto com seu seller_id ({user.id}). Cadastre via API ou crie sua conta como SELLER.
+                    </div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: C.gray50, color: C.gray600, fontSize: 11, textTransform: 'uppercase' }}>
+                          <th style={{ padding: '10px 14px', textAlign: 'left' }}>Produto</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'right' }}>Preço</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'center' }}>Estoque</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'left' }}>Categoria</th>
+                          <th style={{ padding: '10px 14px', textAlign: 'right' }}>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {myProducts.slice(0, 10).map(p => (
+                          <tr key={p.id} style={{ borderBottom: `1px solid ${C.gray100}` }}>
+                            <td style={{ padding: '10px 14px', color: C.gray800 }}>
+                              <span style={{ marginRight: 8 }}>{productIcon(p)}</span>{p.title}
+                            </td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: C.gray900 }}>R$ {Number(p.price).toLocaleString('pt-BR')}</td>
+                            <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                              <Badge color={p.stock <= 5 ? C.danger : p.stock <= 10 ? C.warning : C.success}
+                                bg={p.stock <= 5 ? C.dangerBg : p.stock <= 10 ? C.warningBg : C.successBg}>
+                                {p.stock}
+                              </Badge>
+                            </td>
+                            <td style={{ padding: '10px 14px', color: C.gray600 }}>{p.category}</td>
+                            <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.action, fontSize: 12, fontWeight: 700, marginRight: 8 }}>Editar</button>
+                              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.gray500, fontSize: 12 }}>•••</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </Card>
+
+                <Card hover={false} style={{ padding: 0, overflow: 'hidden' }}>
+                  <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.gray100}`, fontWeight: 700, fontSize: 15, color: C.gray800 }}>
+                    Pedidos recentes ({(myOrders || []).length})
+                  </div>
+                  {(myOrders || []).slice(0, 8).map(o => (
+                    <div key={o.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 14, padding: '12px 20px', borderBottom: `1px solid ${C.gray100}`, alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.gray800 }}>Pedido #{o.id} • Produto #{o.productId}</div>
+                        <div style={{ fontSize: 11, color: C.gray500 }}>{o.quantity} item(ns) • {o.createdAt ? new Date(o.createdAt).toLocaleString('pt-BR') : ''}</div>
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.gray900 }}>R$ {Number(o.totalAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                      <OrderBadge status={o.status} />
+                    </div>
+                  ))}
+                  {(myOrders || []).length === 0 && (
+                    <div style={{ padding: '30px 20px', textAlign: 'center', color: C.gray500, fontSize: 13 }}>Sem pedidos para mostrar.</div>
+                  )}
+                </Card>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function App() { return (<div><Header /><SellerDashboard /></div>); }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

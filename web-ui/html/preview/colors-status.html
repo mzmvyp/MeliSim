@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Nunito Sans', sans-serif; background: #fff; padding: 20px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.card { border-radius: 6px; overflow: hidden; }
+.top { height: 40px; }
+.bot { padding: 8px 10px; border: 1px solid #eee; border-top: none; border-radius: 0 0 6px 6px; display: flex; gap: 8px; align-items: center; }
+.pill { border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+.meta { font-size: 10px; color: #666; font-family: monospace; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="card">
+    <div class="top" style="background:#00A650;"></div>
+    <div class="bot">
+      <span class="pill" style="background:#E8F7EF;color:#00A650;">Success</span>
+      <span class="meta">#00A650</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="top" style="background:#F23D4F;"></div>
+    <div class="bot">
+      <span class="pill" style="background:#FEE8EA;color:#F23D4F;">Danger</span>
+      <span class="meta">#F23D4F</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="top" style="background:#F2A900;"></div>
+    <div class="bot">
+      <span class="pill" style="background:#FFF3E0;color:#b37800;">Warning</span>
+      <span class="meta">#F2A900</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="top" style="background:#3483FA;"></div>
+    <div class="bot">
+      <span class="pill" style="background:#EBF4FF;color:#3483FA;">Info</span>
+      <span class="meta">#3483FA</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

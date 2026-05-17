@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Notificações</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #EBEBEB; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel">
+    const ICONS = {
+      'order-created':     { icon: '📦', label: 'Pedido criado',   color: C.action,  bg: C.actionLt },
+      'payment-confirmed': { icon: '💳', label: 'Pagamento OK',    color: C.success, bg: C.successBg },
+      'payment-failed':    { icon: '⚠',  label: 'Pgto falhou',     color: C.danger,  bg: C.dangerBg },
+      'stock-alert':       { icon: '📉', label: 'Estoque baixo',   color: C.warning, bg: C.warningBg },
+    };
+
+    function Notifications() {
+      MeliSim.requireAuth();
+      const user = MeliSim.getUser();
+      const [filter, setFilter] = React.useState('ALL');
+      const { data, loading, error, reload } = useApi(
+        () => MeliSim.listNotifications(user.id), [user?.id]);
+
+      const filtered = React.useMemo(() => {
+        if (!data) return [];
+        if (filter === 'ALL') return data;
+        return data.filter(n => n.event_type === filter);
+      }, [data, filter]);
+
+      return (
+        <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: C.blue }}>Notificações</h1>
+            <Btn variant="ghost" size="sm" onClick={reload}>↻ Atualizar</Btn>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
+            {[['ALL', 'Todas'], ['order-created', 'Pedidos'], ['payment-confirmed', 'Pgto OK'], ['payment-failed', 'Pgto falhou'], ['stock-alert', 'Estoque']].map(([k, l]) => (
+              <button key={k} onClick={() => setFilter(k)}
+                style={{ padding: '7px 14px', border: `1px solid ${filter === k ? C.action : C.gray200}`, background: filter === k ? C.actionLt : C.white, color: filter === k ? C.action : C.gray700, borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: T.sans }}>{l}</button>
+            ))}
+          </div>
+
+          {loading && <Loading label="Buscando notificações…" />}
+          {error && <ErrorState error={error} onRetry={reload} />}
+          {!loading && !error && filtered.length === 0 && (
+            <EmptyState icon="🔕" title="Sem notificações"
+              description={filter === 'ALL' ? 'Você ainda não recebeu notificações. Faça um pedido para vê-las chegando.' : `Nenhuma do tipo ${filter}.`} />
+          )}
+          {filtered.map(n => {
+            const meta = ICONS[n.event_type] || { icon: '🔔', label: n.event_type, color: C.gray700, bg: C.gray100 };
+            return (
+              <Card key={n.id} style={{ padding: 14, marginBottom: 8, display: 'grid', gridTemplateColumns: '40px 1fr auto', gap: 12, alignItems: 'center' }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: meta.bg, color: meta.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{meta.icon}</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.gray800 }}>{n.subject || meta.label}</div>
+                  <div style={{ fontSize: 12, color: C.gray500, marginTop: 2 }}>{n.channel} • {meta.label}</div>
+                </div>
+                <div style={{ fontSize: 11, color: C.gray400 }}>{new Date(n.created_at).toLocaleString('pt-BR')}</div>
+              </Card>
+            );
+          })}
+        </div>
+      );
+    }
+
+    function App() { return (<div><Header /><Notifications /></div>); }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

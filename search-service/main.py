@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from consumers.product_consumer import run_consumer
 from observability import install as install_observability
 from routes.search_routes import router as search_router
+from services.catalog_bootstrap import bootstrap_from_products_service
 from services.search_service import service
 
 logging.basicConfig(
@@ -22,6 +23,7 @@ _consumer_task: asyncio.Task | None = None
 async def lifespan(app: FastAPI):
     global _stop_event, _consumer_task
     await service.ensure_index()
+    await bootstrap_from_products_service()
     _stop_event = asyncio.Event()
     _consumer_task = asyncio.create_task(run_consumer(_stop_event))
     yield

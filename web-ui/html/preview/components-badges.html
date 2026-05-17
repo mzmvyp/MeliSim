@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Nunito Sans', sans-serif; background: #fff; padding: 20px; }
+.group { margin-bottom: 14px; }
+.label { font-size: 10px; font-weight: 700; color: #bbb; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; font-family: monospace; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="group">
+  <div class="label">Order Status</div>
+  <div class="row">
+    <span class="badge" style="background:#EBF4FF;color:#3483FA;">CREATED</span>
+    <span class="badge" style="background:#FFF3E0;color:#b37800;">PAYMENT_PENDING</span>
+    <span class="badge" style="background:#E8F7EF;color:#00A650;">PAID</span>
+    <span class="badge" style="background:#EBF4FF;color:#2968C8;">SHIPPED</span>
+    <span class="badge" style="background:#2D3277;color:#FFE600;">DELIVERED</span>
+    <span class="badge" style="background:#FEE8EA;color:#F23D4F;">CANCELLED</span>
+  </div>
+</div>
+<div class="group">
+  <div class="label">Product Tags</div>
+  <div class="row">
+    <span class="badge" style="background:#FFE600;color:#2D3277;">NOVO</span>
+    <span class="badge" style="background:#FEE8EA;color:#F23D4F;">PROMO</span>
+    <span class="badge" style="background:#E8F7EF;color:#00A650;">FRETE GRÁTIS</span>
+    <span class="badge" style="background:#F5F5F5;color:#666;">Usado</span>
+  </div>
+</div>
+<div class="group">
+  <div class="label">Service Status (Admin)</div>
+  <div class="row">
+    <span class="badge" style="background:#E8F7EF;color:#00A650;">● UP</span>
+    <span class="badge" style="background:#FFF3E0;color:#b37800;">● DEGRADED</span>
+    <span class="badge" style="background:#FEE8EA;color:#F23D4F;">● DOWN</span>
+  </div>
+</div>
+<div class="group">
+  <div class="label">Categories (Chips)</div>
+  <div class="row">
+    <span class="badge" style="background:#EBEBEB;color:#333;border-radius:4px;">Eletrônicos</span>
+    <span class="badge" style="background:#EBEBEB;color:#333;border-radius:4px;">Computadores</span>
+    <span class="badge" style="background:#FFE600;color:#2D3277;border-radius:4px;">Casa</span>
+    <span class="badge" style="background:#EBEBEB;color:#333;border-radius:4px;">Moda</span>
+    <span class="badge" style="background:#EBEBEB;color:#333;border-radius:4px;">Esportes</span>
+  </div>
+</div>
+</body>
+</html>

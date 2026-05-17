@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Nunito Sans', sans-serif; background: #EBEBEB; }
+
+.header { background: #FFE600; padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
+.logo { font-size: 18px; font-weight: 800; color: #2D3277; white-space: nowrap; }
+.search { flex: 1; display: flex; border-radius: 4px; overflow: hidden; border: 1px solid #E5E5E5; }
+.search select { padding: 7px 8px; border: none; border-right: 1px solid #E5E5E5; font-size: 12px; background: #fff; font-family: inherit; color: #666; }
+.search input { flex: 1; padding: 7px 10px; border: none; font-size: 13px; font-family: inherit; outline: none; }
+.search button { background: #2D3277; color: #fff; border: none; padding: 0 14px; cursor: pointer; font-size: 14px; }
+.nav-icons { display: flex; gap: 14px; }
+.icon-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; text-decoration: none; }
+.icon-btn span { font-size: 18px; color: #2D3277; }
+.icon-btn small { font-size: 9px; color: #2D3277; font-weight: 600; }
+
+.cats { background: #2D3277; padding: 0 16px; display: flex; gap: 4px; overflow: hidden; }
+.cat { color: #fff; font-size: 12px; padding: 7px 10px; cursor: pointer; white-space: nowrap; border-radius: 2px; opacity: 0.85; }
+.cat.active, .cat:hover { background: rgba(255,230,0,0.2); opacity: 1; color: #FFE600; }
+
+.sidebar { background: #fff; width: 200px; padding: 12px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+.sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: #333; cursor: pointer; position: relative; }
+.sidebar-item.active { color: #2D3277; font-weight: 700; background: #F5F5F5; }
+.sidebar-item.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #FFE600; border-radius: 0 2px 2px 0; }
+.sidebar-item:hover { background: #F5F5F5; }
+.sidebar-item .ico { font-size: 16px; width: 20px; text-align: center; }
+.sep { height: 1px; background: #EBEBEB; margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">MeliSim</div>
+  <div class="search">
+    <select><option>Todas</option></select>
+    <input placeholder="Buscar produtos, marcas e mais…" />
+    <button>⌕</button>
+  </div>
+  <div class="nav-icons">
+    <a class="icon-btn"><span>🛒</span><small>Carrinho</small></a>
+    <a class="icon-btn"><span>🔔</span><small>Notif.</small></a>
+    <a class="icon-btn"><span>👤</span><small>Conta</small></a>
+  </div>
+</div>
+<div class="cats">
+  <div class="cat active">Eletrônicos</div>
+  <div class="cat">Computadores</div>
+  <div class="cat">Casa</div>
+  <div class="cat">Moda</div>
+  <div class="cat">Esportes</div>
+  <div class="cat">Games</div>
+  <div class="cat">Áudio</div>
+</div>
+<div style="display:flex;margin-top:8px;gap:8px;padding:0 8px;">
+  <div class="sidebar">
+    <div class="sidebar-item active"><span class="ico">⊞</span> Dashboard</div>
+    <div class="sidebar-item"><span class="ico">📦</span> Produtos</div>
+    <div class="sidebar-item"><span class="ico">🛍</span> Vendas</div>
+    <div class="sidebar-item"><span class="ico">📊</span> Estoque</div>
+    <div class="sep"></div>
+    <div class="sidebar-item"><span class="ico">⚙</span> Configurações</div>
+  </div>
+</div>
+</body>
+</html>

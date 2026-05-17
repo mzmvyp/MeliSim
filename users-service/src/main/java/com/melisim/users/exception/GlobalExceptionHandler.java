@@ -29,6 +29,11 @@ public class GlobalExceptionHandler {
         return body(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
+    @ExceptionHandler(InvalidRegistrationException.class)
+    public ResponseEntity<Map<String, Object>> badRegistration(InvalidRegistrationException ex) {
+        return body(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> validation(MethodArgumentNotValidException ex) {
         String details = ex.getBindingResult().getFieldErrors().stream()

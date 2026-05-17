@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Carrinho</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #EBEBEB; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel">
+    function BuyerCart() {
+      const cartCount = useCartCount(); // forces re-render on changes
+      const items = MeliSim.cart.items();
+      const [coupon, setCoupon] = React.useState('');
+      const [couponApplied, setCouponApplied] = React.useState(false);
+
+      const updateQty = (id, delta) => {
+        const it = items.find(x => x.id === id);
+        if (!it) return;
+        MeliSim.cart.setQty(id, it.qty + delta);
+      };
+      const remove = (id) => MeliSim.cart.remove(id);
+
+      const subtotal = items.reduce((s, it) => s + it.price * it.qty, 0);
+      const frete = subtotal >= 299 ? 0 : 39.90;
+      const discount = couponApplied ? Math.round(subtotal * 0.05) : 0;
+      const total = subtotal + frete - discount;
+      const totalQty = items.reduce((s, it) => s + it.qty, 0);
+
+      if (items.length === 0) {
+        return (
+          <EmptyState icon="🛒" title="Seu carrinho está vazio"
+            description="Navegue pelo MeliSim e encontre produtos com os melhores preços."
+            cta={<a href="10-buyer-home.html"><Btn>Continuar comprando</Btn></a>} />
+        );
+      }
+
+      return (
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 16px', display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+          <Card hover={false} style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.gray100}`, fontWeight: 700, fontSize: 18, color: C.gray800 }}>
+              Carrinho ({totalQty} {totalQty === 1 ? 'item' : 'itens'})
+            </div>
+            {items.map((it, i) => (
+              <div key={it.id} style={{ display: 'grid', gridTemplateColumns: '64px 1fr auto auto auto 32px', gap: 16, alignItems: 'center', padding: '16px 20px', borderBottom: i < items.length - 1 ? `1px solid ${C.gray100}` : 'none' }}>
+                <div style={{ width: 64, height: 64, background: C.gray50, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>{productIcon(it)}</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.gray800, lineHeight: 1.3 }}>{it.title}</div>
+                  {it.price >= 299 && <div style={{ fontSize: 11, color: C.success, fontWeight: 600, marginTop: 2 }}>🚚 Frete grátis</div>}
+                </div>
+                <div style={{ fontSize: 14, color: C.gray600 }}>R$ {Number(it.price).toLocaleString('pt-BR')}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button onClick={() => updateQty(it.id, -1)} style={{ width: 28, height: 28, border: `1px solid ${C.gray200}`, background: C.white, borderRadius: 4, cursor: 'pointer', fontSize: 14 }}>−</button>
+                  <span style={{ width: 28, textAlign: 'center', fontSize: 14, fontWeight: 600 }}>{it.qty}</span>
+                  <button onClick={() => updateQty(it.id, 1)} style={{ width: 28, height: 28, border: `1px solid ${C.gray200}`, background: C.white, borderRadius: 4, cursor: 'pointer', fontSize: 14 }}>+</button>
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.gray900, minWidth: 100, textAlign: 'right' }}>R$ {(it.price * it.qty).toLocaleString('pt-BR')}</div>
+                <button onClick={() => remove(it.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: C.gray400, padding: 4 }} title="Remover">✕</button>
+              </div>
+            ))}
+          </Card>
+
+          <Card hover={false} style={{ padding: 20, position: 'sticky', top: 110 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: C.gray800, marginBottom: 16 }}>Resumo da compra</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: C.gray600, marginBottom: 8 }}>
+              <span>Subtotal ({totalQty} itens)</span>
+              <span>R$ {subtotal.toLocaleString('pt-BR')}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: frete === 0 ? C.success : C.gray600, marginBottom: 8 }}>
+              <span>Frete</span>
+              <span>{frete === 0 ? 'Grátis' : `R$ ${frete.toFixed(2).replace('.', ',')}`}</span>
+            </div>
+            {couponApplied && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: C.success, marginBottom: 8 }}>
+                <span>Cupom MELISIM5</span>
+                <span>− R$ {discount.toLocaleString('pt-BR')}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              <input value={coupon} onChange={e => setCoupon(e.target.value)} placeholder="Cupom (tente MELISIM5)"
+                style={{ flex: 1, padding: '8px 10px', border: `1px solid ${C.gray200}`, borderRadius: 4, fontSize: 13, fontFamily: T.sans }} />
+              <button onClick={() => { if (coupon.toUpperCase() === 'MELISIM5') setCouponApplied(true); }}
+                style={{ padding: '8px 12px', background: C.gray50, border: `1px solid ${C.gray200}`, borderRadius: 4, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>Aplicar</button>
+            </div>
+            <div style={{ borderTop: `1px solid ${C.gray100}`, paddingTop: 14, display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, color: C.gray900, marginBottom: 16 }}>
+              <span>Total</span>
+              <span>R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <a href="13-buyer-checkout.html" style={{ textDecoration: 'none' }}>
+              <Btn variant="primary" size="lg" style={{ width: '100%' }}>Finalizar compra</Btn>
+            </a>
+            <div style={{ textAlign: 'center', marginTop: 10, fontSize: 13 }}>
+              <a href="10-buyer-home.html" style={{ color: C.action, textDecoration: 'none' }}>Continuar comprando</a>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
+    function App() {
+      return (<div><Header /><BuyerCart /></div>);
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

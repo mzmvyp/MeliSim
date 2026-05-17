@@ -33,3 +33,8 @@ Thumbs.db
 # Local/private docs (do not publish)
 ARCHITECTURE.md
 STUDY_GUIDE.md
+
+# Local tooling / secrets
+.claude/
+migrador.jar
+infra/prometheus/secrets/*.token

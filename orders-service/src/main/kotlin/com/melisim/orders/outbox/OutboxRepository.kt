@@ -7,9 +7,14 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.stereotype.Repository
 
 import jakarta.persistence.LockModeType
+import java.time.Instant
 
 @Repository
 interface OutboxRepository : JpaRepository<OutboxEvent, Long> {
+
+    fun countByStatus(status: OutboxStatus): Long
+
+    fun countByStatusAndSentAtAfter(status: OutboxStatus, sentAt: Instant): Long
 
     /**
      * Fetch a batch of pending events with a pessimistic lock so multiple

@@ -58,7 +58,7 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
       acks: all
       retries: 10
-      compression-type: snappy
+      compression-type: lz4              # snappy needs glibc; alpine base lacks it
       properties:
         # Strong durability + exactly-once-ish semantics on the producer side.
         # Idempotent producer prevents duplicates from broker-side retries.
@@ -66,7 +66,7 @@ spring:
         max.in.flight.requests.per.connection: 5
         linger.ms: 10                     # batch window — lets pipelining kick in
         batch.size: 32768                 # 32KB batches before flushing early
-        delivery.timeout.ms: 30000
+        delivery.timeout.ms: 60000        # >= linger.ms + request.timeout.ms (30000)
     listener:
       concurrency: 3                      # 3 consumer threads per @KafkaListener
       ack-mode: BATCH

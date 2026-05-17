@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Nunito Sans', sans-serif; background: #fff; padding: 20px; }
+.group { margin-bottom: 16px; }
+.label { font-size: 10px; font-weight: 700; color: #bbb; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; font-family: monospace; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button { font-family: 'Nunito Sans', sans-serif; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; transition: all 150ms ease; }
+.btn-primary { background: #FFE600; color: #2D3277; padding: 10px 20px; font-size: 14px; }
+.btn-primary:hover { background: #F0D900; }
+.btn-secondary { background: transparent; color: #2D3277; border: 2px solid #2D3277; padding: 9px 18px; font-size: 14px; }
+.btn-ghost { background: transparent; color: #3483FA; padding: 10px 20px; font-size: 14px; }
+.btn-danger { background: #F23D4F; color: #fff; padding: 10px 20px; font-size: 14px; }
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 4px; }
+.btn-lg { padding: 14px 28px; font-size: 16px; }
+.btn-disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-loading { position: relative; color: transparent; }
+.btn-loading::after { content: ''; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px; border: 2px solid #2D3277; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="group">
+  <div class="label">Variants</div>
+  <div class="btns">
+    <button class="btn-primary">Comprar agora</button>
+    <button class="btn-secondary">Adicionar ao carrinho</button>
+    <button class="btn-ghost">Ver mais</button>
+    <button class="btn-danger">Cancelar pedido</button>
+  </div>
+</div>
+<div class="group">
+  <div class="label">Sizes</div>
+  <div class="btns">
+    <button class="btn-primary btn-sm">Pequeno</button>
+    <button class="btn-primary">Médio</button>
+    <button class="btn-primary btn-lg">Grande</button>
+  </div>
+</div>
+<div class="group">
+  <div class="label">States</div>
+  <div class="btns">
+    <button class="btn-primary">Padrão</button>
+    <button class="btn-primary btn-disabled" disabled>Desabilitado</button>
+    <button class="btn-primary btn-loading" style="min-width:120px;">Carregando</button>
+  </div>
+</div>
+</body>
+</html>

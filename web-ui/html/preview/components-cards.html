@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Nunito Sans', sans-serif; background: #EBEBEB; padding: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.card { background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0,0,0,0.10); overflow: hidden; width: 170px; transition: box-shadow 150ms, transform 150ms; cursor: pointer; }
+.card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.16); transform: translateY(-2px); }
+.img { width: 100%; height: 120px; background: #F5F5F5; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 36px; position: relative; }
+.badge { position: absolute; top: 6px; left: 6px; background: #00A650; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; }
+.body { padding: 10px; }
+.title { font-size: 13px; color: #333; line-height: 1.35; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.price { font-size: 20px; font-weight: 300; color: #333; }
+.installments { font-size: 11px; color: #00A650; font-weight: 600; }
+.stars { font-size: 10px; color: #F2A900; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="img">
+    📱
+    <div class="badge">FRETE GRÁTIS</div>
+  </div>
+  <div class="body">
+    <div class="title">iPhone 15 Pro 256GB Titânio Natural</div>
+    <div class="price">R$ 8.999<span style="font-size:14px">,00</span></div>
+    <div class="installments">12x R$ 749,92 s/ juros</div>
+    <div class="stars">★★★★★ <span style="color:#666">(234)</span></div>
+  </div>
+</div>
+<div class="card">
+  <div class="img">🎧</div>
+  <div class="body">
+    <div class="title">Sony WH-1000XM5 Headphone Bluetooth</div>
+    <div class="price">R$ 2.499<span style="font-size:14px">,00</span></div>
+    <div class="installments">12x R$ 208,25 s/ juros</div>
+    <div class="stars">★★★★☆ <span style="color:#666">(89)</span></div>
+  </div>
+</div>
+<div class="card">
+  <div class="img">
+    💻
+    <div class="badge">FRETE GRÁTIS</div>
+  </div>
+  <div class="body">
+    <div class="title">MacBook Air M3 13" 8GB/256GB</div>
+    <div class="price">R$ 9.999<span style="font-size:14px">,00</span></div>
+    <div class="installments">12x R$ 833,25 s/ juros</div>
+    <div class="stars">★★★★★ <span style="color:#666">(412)</span></div>
+  </div>
+</div>
+</body>
+</html>

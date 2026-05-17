@@ -61,3 +61,132 @@ def test_valid_token_passes_auth_layer(client):
         headers={"Authorization": f"Bearer {token}", "X-Forwarded-For": "1.1.1.1"},
     )
     assert resp.status_code != 401
+
+
+def test_metrics_requires_scrape_token_or_auth(client, monkeypatch):
+    monkeypatch.delenv("METRICS_SCRAPE_TOKEN_FILE", raising=False)
+    monkeypatch.delenv("METRICS_SCRAPE_TOKEN", raising=False)
+    assert client.get("/metrics").status_code == 401
+
+    monkeypatch.setenv("METRICS_SCRAPE_TOKEN", "scrape-test-token")
+    assert client.get("/metrics").status_code == 401
+    assert (
+        client.get(
+            "/metrics",
+            headers={"Authorization": "Bearer wrong"},
+        ).status_code
+        == 401
+    )
+    ok = client.get(
+        "/metrics",
+        headers={"Authorization": "Bearer scrape-test-token"},
+    )
+    assert ok.status_code == 200
+    assert b"# HELP" in ok.content or b"# TYPE" in ok.content
+
+
+def test_admin_services_health_requires_auth(client):
+    assert client.get("/api/v1/admin/services-health").status_code == 401
+
+
+def test_admin_services_health_forbidden_for_non_admin(client):
+    token = jwt.encode({"sub": "1", "role": "BUYER"}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    r = client.get(
+        "/api/v1/admin/services-health",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 403
+    assert "Admin" in r.json().get("detail", "")
+
+
+def test_admin_services_health_allows_admin_token(client):
+    token = jwt.encode({"sub": "99", "role": "ADMIN"}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    r = client.get(
+        "/api/v1/admin/services-health",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # Upstreams are not running in unit tests — expect 200 with some services down, or 502.
+    assert r.status_code in (200, 502)
+    if r.status_code == 200:
+        body = r.json()
+        assert "services" in body
+        assert "summary" in body
+
+
+def test_admin_outbox_summary_requires_admin(client):
+    token = jwt.encode({"sub": "1", "role": "BUYER"}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    r = client.get(
+        "/api/v1/admin/outbox/summary",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 403
+
+
+def test_admin_dlq_topics_requires_admin(client):
+    assert client.get("/api/v1/admin/dlq/topics").status_code == 401
+    token = jwt.encode({"sub": "2", "role": "BUYER"}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    assert client.get(
+        "/api/v1/admin/dlq/topics",
+        headers={"Authorization": f"Bearer {token}"},
+    ).status_code == 403
+
+
+def test_admin_dlq_topics_returns_catalog(client):
+    token = jwt.encode({"sub": "1", "role": "ADMIN"}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    r = client.get(
+        "/api/v1/admin/dlq/topics",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "topics" in body and len(body["topics"]) >= 6
+    assert body["topics"][0]["name"].endswith(".dlq")
+
+
+def test_admin_dashboard_kpis_requires_admin(client):
+    token = jwt.encode({"sub": "1", "role": "BUYER"}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    assert (
+        client.get(
+            "/api/v1/admin/dashboard-kpis",
+            headers={"Authorization": f"Bearer {token}"},
+        ).status_code
+        == 403
+    )
+
+
+def test_admin_dashboard_kpis_returns_payload(client):
+    token = jwt.encode({"sub": "1", "role": "ADMIN"}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    r = client.get(
+        "/api/v1/admin/dashboard-kpis",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "prometheus_ok" in body
+    assert "kafka_topic_count" in body
+
+
+def test_admin_service_metrics_requires_admin(client):
+    token = jwt.encode({"sub": "1", "role": "BUYER"}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    assert (
+        client.get(
+            "/api/v1/admin/service-metrics",
+            headers={"Authorization": f"Bearer {token}"},
+        ).status_code
+        == 403
+    )
+
+
+def test_admin_service_metrics_returns_services(client):
+    token = jwt.encode({"sub": "1", "role": "ADMIN"}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    r = client.get(
+        "/api/v1/admin/service-metrics",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "services" in body
+    assert len(body["services"]) == 8
+    names = {s["name"] for s in body["services"]}
+    assert "api-gateway" in names
+    assert "stock-monitor" in names

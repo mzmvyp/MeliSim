@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Nunito Sans', sans-serif; background: #fff; padding: 20px; }
+.group { margin-bottom: 14px; }
+.label { font-size: 10px; font-weight: 700; color: #bbb; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; font-family: monospace; }
+.field { position: relative; margin-bottom: 8px; }
+input, select, textarea { font-family: 'Nunito Sans', sans-serif; font-size: 14px; width: 100%; padding: 10px 14px; border: 1px solid #E5E5E5; border-radius: 4px; outline: none; color: #333; background: #fff; transition: border 150ms; }
+input:focus, select:focus, textarea:focus { border-color: #3483FA; box-shadow: 0 0 0 2px rgba(52,131,250,0.15); }
+.input-error input { border-color: #F23D4F; }
+.err-msg { font-size: 12px; color: #F23D4F; margin-top: 3px; }
+.search-wrap { position: relative; }
+.search-wrap input { padding-left: 36px; }
+.search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #999; font-size: 16px; }
+</style>
+</head>
+<body>
+<div class="group">
+  <div class="label">Inputs</div>
+  <div class="field"><input type="text" placeholder="Nome completo" /></div>
+  <div class="field"><input type="email" value="bob@melisim.test" /></div>
+  <div class="field input-error">
+    <input type="password" placeholder="Senha" />
+    <div class="err-msg">Senha deve ter pelo menos 8 caracteres</div>
+  </div>
+</div>
+<div class="group">
+  <div class="label">Search</div>
+  <div class="field search-wrap">
+    <span class="search-icon">⌕</span>
+    <input type="search" placeholder="Buscar em MeliSim..." />
+  </div>
+</div>
+<div class="group">
+  <div class="label">Select</div>
+  <div class="field">
+    <select><option>Eletrônicos</option><option>Computadores</option><option>Casa</option></select>
+  </div>
+</div>
+<div class="group">
+  <div class="label">Textarea</div>
+  <div class="field">
+    <textarea rows="3" placeholder="Descreva seu produto..."></textarea>
+  </div>
+</div>
+</body>
+</html>

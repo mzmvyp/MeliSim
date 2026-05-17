@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeliSim — Checkout</title>
+  <link rel="stylesheet" href="colors_and_type.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-sans); background: #EBEBEB; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="ui_kits/app/api.js"></script>
+  <script type="text/babel" src="ui_kits/app/shared.jsx"></script>
+  <script type="text/babel">
+    const inputSt = { width: '100%', padding: '11px 12px', border: `1px solid ${C.gray200}`, borderRadius: 6, fontSize: 14, fontFamily: T.sans, outline: 'none' };
+    const labelSt = { fontSize: 12, fontWeight: 700, color: C.gray700, marginBottom: 6, display: 'block' };
+
+    function Stepper({ step }) {
+      const steps = ['Endereço', 'Pagamento', 'Revisão'];
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 24 }}>
+          {steps.map((label, i) => (
+            <React.Fragment key={i}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: i <= step ? C.action : C.gray200, color: C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>
+                  {i < step ? '✓' : i + 1}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: i === step ? 700 : 500, color: i <= step ? C.action : C.gray500 }}>{label}</span>
+              </div>
+              {i < steps.length - 1 && <div style={{ flex: 1, height: 2, background: i < step ? C.action : C.gray200, maxWidth: 80 }} />}
+            </React.Fragment>
+          ))}
+        </div>
+      );
+    }
+
+    function Checkout() {
+      MeliSim.requireAuth();
+      const user = MeliSim.getUser();
+      const [step, setStep] = React.useState(0);
+      const [submitting, setSubmitting] = React.useState(false);
+      const [results, setResults] = React.useState(null);
+      const [toast, setToast] = React.useState(null);
+
+      const items = MeliSim.cart.items();
+      const subtotal = items.reduce((s, it) => s + it.price * it.qty, 0);
+      const frete = subtotal >= 299 ? 0 : 39.90;
+      const total = subtotal + frete;
+
+      const [addr, setAddr] = React.useState({ cep: '01310-100', street: 'Av. Paulista', number: '1578', complement: 'Apto 101', district: 'Bela Vista', city: 'São Paulo', uf: 'SP' });
+      const [payment, setPayment] = React.useState({ method: 'pix', cardNumber: '', cardName: '', cardExp: '', cardCvv: '', installments: 1 });
+      const [idemKey] = React.useState(() => (window.crypto && window.crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
+
+      if (items.length === 0 && !results) {
+        return (
+          <EmptyState icon="🛒" title="Carrinho vazio"
+            description="Adicione produtos antes de finalizar a compra."
+            cta={<a href="10-buyer-home.html"><Btn>Continuar comprando</Btn></a>} />
+        );
+      }
+      if (results) return <CheckoutResult results={results} />;
+
+      const finalize = async () => {
+        if (!user?.id) { setToast({ message: 'Você precisa estar logado.', type: 'error' }); return; }
+        setSubmitting(true);
+        const placed = [];
+        try {
+          for (let i = 0; i < items.length; i++) {
+            const line = items[i];
+            const order = await MeliSim.createOrder({ buyerId: user.id, productId: line.id, quantity: line.qty });
+            const lineKey = `${idemKey}-line-${line.id}`;
+            const payment_ = await MeliSim.createPayment({
+              orderId: order.id, amount: Number(order.totalAmount || (line.price * line.qty)),
+              method: payment.method, idempotencyKey: lineKey,
+            });
+            placed.push({ order, payment: payment_, line });
+          }
+          MeliSim.cart.clear();
+          setResults({ placed, total, address: addr, paymentMethod: payment.method });
+        } catch (err) {
+          setToast({ message: err.message || 'Falha ao finalizar', type: 'error' });
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      return (
+        <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
+          <Stepper step={step} />
+          <Card hover={false} style={{ padding: 24 }}>
+            {step === 0 && (
+              <>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: C.blue, marginBottom: 18 }}>Endereço de entrega</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 12, marginBottom: 12 }}>
+                  <div><label style={labelSt}>CEP</label><input style={inputSt} value={addr.cep} onChange={e => setAddr({ ...addr, cep: e.target.value })} /></div>
+                  <div><label style={labelSt}>Rua / Av.</label><input style={inputSt} value={addr.street} onChange={e => setAddr({ ...addr, street: e.target.value })} /></div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div><label style={labelSt}>Número</label><input style={inputSt} value={addr.number} onChange={e => setAddr({ ...addr, number: e.target.value })} /></div>
+                  <div><label style={labelSt}>Complemento</label><input style={inputSt} value={addr.complement} onChange={e => setAddr({ ...addr, complement: e.target.value })} /></div>
+                  <div><label style={labelSt}>Bairro</label><input style={inputSt} value={addr.district} onChange={e => setAddr({ ...addr, district: e.target.value })} /></div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 12, marginBottom: 18 }}>
+                  <div><label style={labelSt}>Cidade</label><input style={inputSt} value={addr.city} onChange={e => setAddr({ ...addr, city: e.target.value })} /></div>
+                  <div><label style={labelSt}>UF</label><input style={inputSt} value={addr.uf} onChange={e => setAddr({ ...addr, uf: e.target.value })} /></div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Btn variant="primary" onClick={() => setStep(1)}>Continuar →</Btn>
+                </div>
+              </>
+            )}
+
+            {step === 1 && (
+              <>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: C.blue, marginBottom: 18 }}>Forma de pagamento</h2>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+                  {[['pix', '⚡ Pix', 'Aprovação imediata'], ['credit_card', '💳 Cartão', 'Até 12x sem juros'], ['boleto', '🧾 Boleto', '1-3 dias úteis']].map(([k, label, sub]) => (
+                    <button key={k} onClick={() => setPayment({ ...payment, method: k })}
+                      style={{ flex: 1, padding: '14px 10px', border: `2px solid ${payment.method === k ? C.action : C.gray200}`, background: payment.method === k ? C.actionLt : C.white, borderRadius: 6, cursor: 'pointer', textAlign: 'left', fontFamily: T.sans }}>
+                      <div style={{ fontWeight: 700, color: payment.method === k ? C.action : C.gray700 }}>{label}</div>
+                      <div style={{ fontSize: 11, color: C.gray500, marginTop: 2 }}>{sub}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {payment.method === 'pix' && (
+                  <div style={{ background: C.actionLt, padding: 18, borderRadius: 6, textAlign: 'center' }}>
+                    <div style={{ width: 160, height: 160, background: C.white, margin: '0 auto', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 80, color: C.blue }}>▣</div>
+                    <div style={{ fontSize: 13, color: C.gray700, marginTop: 12 }}>Escaneie o QR ou copie a chave Pix:</div>
+                    <code style={{ display: 'inline-block', marginTop: 6, background: C.white, padding: '6px 12px', borderRadius: 4, fontSize: 11 }}>melisim-pix-{idemKey.slice(0, 8)}</code>
+                  </div>
+                )}
+                {payment.method === 'credit_card' && (
+                  <>
+                    <div style={{ marginBottom: 12 }}><label style={labelSt}>Número do cartão</label><input style={inputSt} placeholder="•••• •••• •••• ••••" value={payment.cardNumber} onChange={e => setPayment({ ...payment, cardNumber: e.target.value })} /></div>
+                    <div style={{ marginBottom: 12 }}><label style={labelSt}>Nome impresso</label><input style={inputSt} placeholder="Como está no cartão" value={payment.cardName} onChange={e => setPayment({ ...payment, cardName: e.target.value })} /></div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                      <div><label style={labelSt}>Validade (MM/AA)</label><input style={inputSt} placeholder="12/29" value={payment.cardExp} onChange={e => setPayment({ ...payment, cardExp: e.target.value })} /></div>
+                      <div><label style={labelSt}>CVV</label><input style={inputSt} placeholder="123" value={payment.cardCvv} onChange={e => setPayment({ ...payment, cardCvv: e.target.value })} /></div>
+                    </div>
+                  </>
+                )}
+                {payment.method === 'boleto' && (
+                  <div style={{ background: C.warningBg, padding: 14, borderRadius: 6, fontSize: 13, color: '#7a4f00' }}>
+                    O boleto será gerado e enviado por e-mail. Prazo de compensação: 1 a 3 dias úteis.
+                  </div>
+                )}
+
+                <div style={{ marginTop: 14, padding: 12, background: C.gray50, borderRadius: 4, fontSize: 12, color: C.gray600 }}>
+                  🔒 <strong>Idempotency-Key</strong>: <code style={{ fontSize: 11 }}>{idemKey}</code><br />
+                  <span style={{ fontSize: 11 }}>Garante que retentar esse pagamento não gera cobrança duplicada.</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18 }}>
+                  <Btn variant="secondary" onClick={() => setStep(0)}>← Voltar</Btn>
+                  <Btn variant="primary" onClick={() => setStep(2)}>Revisar →</Btn>
+                </div>
+              </>
+            )}
+
+            {step === 2 && (
+              <>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: C.blue, marginBottom: 18 }}>Revisão</h2>
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.gray500, textTransform: 'uppercase' }}>Endereço</div>
+                  <div style={{ fontSize: 14, color: C.gray800, marginTop: 4 }}>{addr.street}, {addr.number} {addr.complement && `— ${addr.complement}`}</div>
+                  <div style={{ fontSize: 13, color: C.gray600 }}>{addr.district}, {addr.city}/{addr.uf} — CEP {addr.cep}</div>
+                </div>
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.gray500, textTransform: 'uppercase' }}>Pagamento</div>
+                  <div style={{ fontSize: 14, color: C.gray800, marginTop: 4 }}>{payment.method === 'pix' ? '⚡ Pix' : payment.method === 'credit_card' ? '💳 Cartão de crédito' : '🧾 Boleto'}</div>
+                </div>
+                <div style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.gray500, textTransform: 'uppercase' }}>Itens ({items.length})</div>
+                  {items.map(it => (
+                    <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: C.gray700, padding: '6px 0', borderBottom: `1px solid ${C.gray100}` }}>
+                      <span>{it.qty}× {it.title}</span>
+                      <span>R$ {(it.price * it.qty).toLocaleString('pt-BR')}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ background: C.gray50, padding: 14, borderRadius: 4, marginBottom: 18 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: C.gray700 }}>
+                    <span>Subtotal</span><span>R$ {subtotal.toLocaleString('pt-BR')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: frete === 0 ? C.success : C.gray700, marginTop: 4 }}>
+                    <span>Frete</span><span>{frete === 0 ? 'Grátis' : `R$ ${frete.toFixed(2).replace('.', ',')}`}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 800, color: C.gray900, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.gray200}` }}>
+                    <span>Total</span><span>R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Btn variant="secondary" onClick={() => setStep(1)} disabled={submitting}>← Voltar</Btn>
+                  <Btn variant="primary" size="lg" onClick={finalize} loading={submitting}>
+                    {submitting ? 'Processando…' : `Confirmar — R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                  </Btn>
+                </div>
+              </>
+            )}
+          </Card>
+          {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+        </div>
+      );
+    }
+
+    function CheckoutResult({ results }) {
+      const allPaid = results.placed.every(({ payment }) => payment.status === 'CONFIRMED');
+      return (
+        <div style={{ maxWidth: 720, margin: '40px auto', padding: '0 16px' }}>
+          <Card hover={false} style={{ padding: 32, textAlign: 'center' }}>
+            <div style={{ fontSize: 64, color: allPaid ? C.success : C.warning, marginBottom: 16 }}>{allPaid ? '✓' : '⚠'}</div>
+            <h1 style={{ fontSize: 24, fontWeight: 800, color: C.gray900, marginBottom: 6 }}>
+              {allPaid ? 'Pedido confirmado!' : 'Pedido criado — pagamento pendente'}
+            </h1>
+            <p style={{ fontSize: 14, color: C.gray600, marginBottom: 24 }}>
+              {allPaid ? 'Recebemos seu pagamento. Você verá o status mudar para PAID em segundos.' : 'Alguns pagamentos não puderam ser confirmados.'}
+            </p>
+            <div style={{ background: C.gray50, padding: 16, borderRadius: 6, textAlign: 'left', marginBottom: 24 }}>
+              {results.placed.map(({ order, payment }, i) => (
+                <div key={i} style={{ padding: '8px 0', borderBottom: i < results.placed.length - 1 ? `1px solid ${C.gray200}` : 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.gray700 }}>Pedido <strong>#{order.id}</strong></span>
+                    <OrderBadge status={order.status} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.gray500, marginTop: 4 }}>
+                    <span>Pgto #{payment.id} via {payment.method}</span>
+                    <span style={{ color: payment.status === 'CONFIRMED' ? C.success : C.warning, fontWeight: 700 }}>{payment.status}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <a href="14-buyer-orders.html" style={{ textDecoration: 'none' }}><Btn variant="primary">Ver meus pedidos</Btn></a>
+              <a href="10-buyer-home.html" style={{ textDecoration: 'none' }}><Btn variant="secondary">Continuar comprando</Btn></a>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
+    function App() { return (<div><Header /><Checkout /></div>); }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
